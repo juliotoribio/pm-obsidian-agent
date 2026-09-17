@@ -20,11 +20,11 @@ Se compone de los siguientes skills:
 
 ## Instalación
 
-Este repositorio está estructurado como una **Customization Root** estándar de Antigravity. Para instalarlo:
+Este repositorio está estructurado para ser integrado en un perfil de **Hermes**. Para instalarlo:
 
-1. Clona este repositorio en el directorio `~/.gemini/config/` de tu máquina local, o dentro de un directorio `.agents/` en la raíz de tu proyecto.
-2. Hermes detectará automáticamente los skills contenidos en el directorio `skills/`.
-3. Configura tus credenciales de Asana (`ASANA_ACCESS_TOKEN`) y la ruta a tu bóveda (`OBSIDIAN_VAULT_PATH`) en el archivo `.env` de tu perfil de Hermes.
+1. Clona este repositorio y copia el contenido de la carpeta `skills/` en el directorio `$HOME/.hermes/skills/` de tu máquina local.
+2. Hermes detectará automáticamente los skills.
+3. Configura tus credenciales de Asana (`ASANA_ACCESS_TOKEN`) y la ruta a tu bóveda (`OBSIDIAN_VAULT_PATH`) en el archivo `.env` de tu perfil de Hermes (ej. `$HOME/.hermes/profiles/tu_perfil/.env`).
 
 ## Notas de Uso
 
