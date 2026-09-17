@@ -214,8 +214,8 @@ def _wikilink(name):
     return name if "[[" in name else "[[%s]]" % slugify(name)
 
 
-def resolve_programa(existing_fm, program_map, gid):
-    """Precedencia: Portfolio de Asana > override humano (programa_manual) > genérico.
+def resolve_programa(existing_fm, program_map, gid, ws_name=None):
+    """Precedencia: Portfolio de Asana > override humano (programa_manual) > workspace > genérico.
 
     Asana manda: si el proyecto vive en un Portfolio, ese es su programa. El
     `programa_manual` es el respaldo SOLO cuando Asana no agrupa el proyecto
@@ -228,6 +228,8 @@ def resolve_programa(existing_fm, program_map, gid):
     manual = (existing_fm or {}).get("programa_manual")
     if manual:
         return _wikilink(manual)
+    if ws_name:
+        return _wikilink(ws_name)
     return "[[%s]]" % GENERIC_PROGRAM
 
 
@@ -603,7 +605,7 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=5):
 
         cur = existing.get(gid)
         cur_fm = cur["fm"] if cur else {}
-        programa = resolve_programa(cur_fm, program_map, gid)
+        programa = resolve_programa(cur_fm, program_map, gid, ws_name)
         roll = reconcile_tasks(tasks)
         h = source_hash(p, tasks, programa)
 
