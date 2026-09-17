@@ -60,8 +60,15 @@ def load_env():
     here = os.path.dirname(os.path.abspath(__file__))
     env_paths = [
         os.path.join(here, "..", ".env"),
-        os.path.expanduser("~/.hermes/profiles/maha_pm_agent/.env"),
     ]
+    
+    if "HERMES_PROFILE_DIR" in os.environ:
+        env_paths.append(os.path.join(os.environ["HERMES_PROFILE_DIR"], ".env"))
+    elif "HERMES_PROFILE" in os.environ:
+        env_paths.append(os.path.expanduser(f"~/.hermes/profiles/{os.environ['HERMES_PROFILE']}/.env"))
+    else:
+        # Fallback si se corre el script por fuera sin variables de Hermes
+        env_paths.append(os.path.expanduser("~/.hermes/profiles/default/.env"))
 
     found = {}
     for p in env_paths:
