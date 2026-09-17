@@ -299,8 +299,8 @@ El skill es un directorio con `SKILL.md` (más `references/` si crece). Va en el
 directorio de skills del perfil:
 
 ```bash
-export PATH="/Users/user/.hermes/hermes-agent/venv/bin:$PATH"   # el binario NO está en PATH
-cp -R obsidian-pm-context /Users/user/.hermes/skills/           # ruta ABSOLUTA (en sesión $HOME es el perfil)
+export PATH="$HOME/.hermes/hermes-agent/venv/bin:$PATH"   # el binario NO está en PATH
+cp -R obsidian-pm-context $HOME/.hermes/skills/           # ruta ABSOLUTA (en sesión $HOME es el perfil)
 hermes skills list | grep obsidian-pm-context
 ```
 
