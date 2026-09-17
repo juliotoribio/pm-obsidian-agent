@@ -1,32 +1,125 @@
 # PM Obsidian Agent
 
-Este repositorio es una colección de **Skills** de Antigravity/Hermes diseñados para operar un Portafolio de Gestión de Proyectos (PM) conectando **Asana** con **Obsidian**.
+Colección de **Agent Skills** para operar un portafolio de gestión de proyectos (PM) conectando **Asana** con **Obsidian**.
 
-## Arquitectura
+Asana es la fuente de verdad operativa (tareas, fechas, estados, responsables).
+Obsidian es la base de conocimiento duradero (contexto, decisiones, riesgos, aprendizajes).
+Los skills hacen que un agente sincronice una hacia la otra — **en una sola dirección**.
 
-El paquete está diseñado para evitar la duplicación de estado, usando Obsidian como una base de conocimiento viva y Asana como la fuente de verdad operativa.
+## Los tres skills
 
-Se compone de los siguientes skills:
-
-1. **`obsidian`**: Es la capa base. Enseña al agente la sintaxis correcta para escribir archivos de Obsidian (Markdown interactivo, archivos `.base` para consultas, y `.canvas` para mapas visuales). Evita errores comunes de formato.
-2. **`obsidian-pm-context`**: La capa estructural. Provee el modelo mental de PM (Programa > Proyecto > Tarea). Determina qué propiedades y reglas se escriben en el *frontmatter* de las notas para que Obsidian pueda generar tableros y reportes automáticos mediante Bases.
-3. **`asana-obsidian-llm-wiki`**: *(Requerido)* La capa de sincronización que conecta la API de Asana con la bóveda de Obsidian para materializar proyectos y actualizar los reportes.
+| Skill | Rol |
+|---|---|
+| **`obsidian`** | Capa base. Sintaxis correcta de Obsidian: Markdown con WikiLinks, archivos `.base` (vistas tipo base de datos) y `.canvas` (mapas visuales). |
+| **`obsidian-pm-context`** | Capa estructural. El modelo de PM (Programa → Proyecto → Tarea) y las propiedades de *frontmatter* que permiten a Obsidian generar tableros automáticos con Bases. **Requiere `obsidian`.** |
+| **`asana-obsidian-llm-wiki`** | Capa de sincronización. Conecta la API de Asana con el vault de Obsidian: materializa proyectos, reconcilia estados y mantiene los reportes al día. |
 
 ## Requisitos
 
-- **Obsidian**: Instalado localmente con un vault definido.
-- **Asana**: Token de acceso personal (Personal Access Token).
-- **Entorno Hermes**: Un agente configurado en el que se instalarán estos skills.
+- **Obsidian** instalado, con un vault existente.
+- **Asana** con un Personal Access Token ([cómo generarlo](https://developers.asana.com/docs/personal-access-token)).
+- **Hermes Agent** instalado y funcionando.
 
 ## Instalación
 
-Este repositorio está estructurado para ser integrado en un perfil de **Hermes**. Para instalarlo:
+### 1. Clonar
 
-1. Clona este repositorio y copia el contenido de la carpeta `skills/` en el directorio `$HOME/.hermes/skills/` de tu máquina local.
-2. Hermes detectará automáticamente los skills.
-3. Configura tus credenciales de Asana (`ASANA_ACCESS_TOKEN`) y la ruta a tu bóveda (`OBSIDIAN_VAULT_PATH`) en el archivo `.env` de tu perfil de Hermes (ej. `$HOME/.hermes/profiles/tu_perfil/.env`).
+```bash
+git clone https://github.com/juliotoribio/pm-obsidian-agent.git
+```
 
-## Notas de Uso
+### 2. Copiar los skills a tu perfil de Hermes
 
-- **Lógica de Programas**: Si un proyecto no pertenece a un Portfolio en Asana, los scripts utilizarán el nombre del Workspace como "Programa" por defecto para no dejar huérfanos los proyectos en el portafolio de Obsidian.
-- **Modificación manual**: Puedes usar la propiedad `programa_manual` en el *frontmatter* de Obsidian para forzar una agrupación cuando Asana no disponga de Portfolios (ej. tiers gratuitos).
+Los skills van al directorio `skills/` de tu perfil. Sustituye `<PERFIL>` por el nombre de tu perfil:
+
+```bash
+cp -R pm-obsidian-agent/skills/* ~/.hermes/profiles/<PERFIL>/skills/
+```
+
+Verifica que se detectaron:
+
+```bash
+hermes skills list | grep -E "obsidian|asana"
+```
+
+Deberías ver los tres skills en estado `enabled`.
+
+### 3. Configurar credenciales
+
+En el archivo `.env` de tu perfil (`~/.hermes/profiles/<PERFIL>/.env`):
+
+```
+ASANA_ACCESS_TOKEN=<tu...PAT>
+OBSIDIAN_VAULT_PATH=<ruta...vault>
+```
+
+> **Nunca** subas este archivo a un repositorio. Contiene secretos.
+
+### 4. Verificar
+
+```bash
+python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --dry-run
+```
+
+Debe listar el workspace detectado y los proyectos que se sincronizarían. Con `--dry-run` no escribe nada en el vault.
+
+## Uso
+
+El script principal sincroniza Asana → Obsidian:
+
+```bash
+python3 asana_obsidian_sync.py --dry-run    # reporte previo, no escribe nada
+python3 asana_obsidian_sync.py --apply      # ejecuta
+```
+
+`--dry-run` es el modo por defecto. Ninguna escritura ocurre sin `--apply`.
+
+Consulta un proyecto concreto (lado Asana + lado Obsidian):
+
+```bash
+python3 asana_obsidian_sync.py --query <PROJECT_GID>
+```
+
+## Cómo funciona
+
+- **Identidad por ID.** Cada nota se identifica por su `asana_gid`, no por su nombre. Un proyecto renombrado en Asana no crea una nota duplicada.
+- **Zonas separadas.** El agente escribe únicamente entre `<!-- HERMES:START -->` y `<!-- HERMES:END -->`. Todo lo demás — incluida la sección `## Notas humanas` — es intocable.
+- **Sin embeddings.** Markdown, frontmatter, WikiLinks y búsqueda full-text. Sin base vectorial, sin graph database.
+- **Falla en cerrado.** Si Asana no responde, el script aborta sin escribir nada en el vault.
+- **Solo lectura por defecto.** La sincronización únicamente emite `GET`. Las escrituras hacia Asana se hacen con las herramientas MCP, nunca durante un sync.
+
+## Agrupación en Programas
+
+Los proyectos se agrupan por **Portfolio de Asana** cuando existe. Si tu plan de Asana no incluye Portfolios, todos los proyectos caen bajo el nombre del **Workspace** para que no queden huérfanos en el portafolio.
+
+Para forzar una agrupación distinta, agrega `programa_manual` al frontmatter de la nota:
+
+```yaml
+programa_manual: "[[Infraestructura]]"
+```
+
+Asana manda: si existe un Portfolio, se usa ese, y `programa_manual` se ignora.
+
+## Estructura del vault
+
+```
+00 Portafolio.base          # dashboard raíz — todos los proyectos
+02 Programas/               # una nota por programa (+ su .base)
+02 Projects/                # una nota por proyecto de Asana
+04 Decisions/               # decisiones documentadas
+05 Knowledge/               # conocimiento reutilizable
+07 Agents/                  # agentes registrados
+09 Vistas/                  # vistas transversales (bloqueados, en riesgo)
+99 System/                  # protocolo y configuración
+```
+
+## Seguridad
+
+- Ningún secreto vive en el vault.
+- El agente nunca borra notas del vault.
+- Las escrituras masivas requieren aprobación previa.
+- El borrado en Asana se pide explícitamente, elemento por elemento, nunca en lote.
+
+## Licencia
+
+MIT
