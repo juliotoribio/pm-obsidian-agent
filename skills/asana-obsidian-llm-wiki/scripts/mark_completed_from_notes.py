@@ -32,9 +32,15 @@ import urllib.request
 # mask an exported token back to "***" and produce a false "token missing".
 def load_env():
     candidates = [
-        os.path.expanduser("~/.hermes/profiles/maha_pm_agent/.env"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"),
     ]
+    if "HERMES_PROFILE_DIR" in os.environ:
+        candidates.append(os.path.join(os.environ["HERMES_PROFILE_DIR"], ".env"))
+    elif "HERMES_PROFILE" in os.environ:
+        candidates.append(os.path.expanduser(f"~/.hermes/profiles/{os.environ['HERMES_PROFILE']}/.env"))
+    else:
+        candidates.append(os.path.expanduser("~/.hermes/profiles/default/.env"))
+
     for path in candidates:
         if os.path.exists(path):
             env = {}
@@ -48,7 +54,7 @@ def load_env():
 
 
 env = load_env()
-TOKEN = env.get("ASANA_ACCESS_TOKEN") or env.get("ASANA_PAT")
+TOKEN = env.get("ASANA_ACCESS_TOKEN")
 if not TOKEN:
     keys = [k for k in env if "ASANA" in k.upper()]
     raise SystemExit(f"ERROR: no Asana token. Keys present: {keys}")

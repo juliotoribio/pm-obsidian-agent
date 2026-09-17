@@ -86,7 +86,7 @@ python3 asana_obsidian_sync.py --query <PROJECT_GID>
 - **Zonas separadas.** El agente escribe únicamente entre `<!-- HERMES:START -->` y `<!-- HERMES:END -->`. Todo lo demás — incluida la sección `## Notas humanas` — es intocable.
 - **Sin embeddings.** Markdown, frontmatter, WikiLinks y búsqueda full-text. Sin base vectorial, sin graph database.
 - **Falla en cerrado.** Si Asana no responde, el script aborta sin escribir nada en el vault.
-- **Solo lectura por defecto.** La sincronización únicamente emite `GET`. Las escrituras hacia Asana se hacen con las herramientas MCP, nunca durante un sync.
+- **Solo lectura por defecto.** La sincronización únicamente emite `GET`. Las escrituras hacia Asana se hacen mediante los scripts REST atómicos incluidos, nunca durante un sync.
 
 ## Agrupación en Programas
 

@@ -108,18 +108,24 @@ def asana_get(token, path, params=None):
             "Accept": "application/json",
         },
     )
-    try:
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        body = ""
+    import time
+    while True:
         try:
-            body = e.read().decode("utf-8")[:300]
-        except Exception:
-            pass
-        raise AsanaError("Asana HTTP %s on %s: %s" % (e.code, path, body))
-    except urllib.error.URLError as e:
-        raise AsanaError("Asana unreachable (%s): %s" % (path, e.reason))
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                retry_after = int(e.headers.get("Retry-After", 5))
+                time.sleep(retry_after)
+                continue
+            body = ""
+            try:
+                body = e.read().decode("utf-8")[:300]
+            except Exception:
+                pass
+            raise AsanaError("Asana HTTP %s on %s: %s" % (e.code, path, body))
+        except urllib.error.URLError as e:
+            raise AsanaError("Asana unreachable (%s): %s" % (path, e.reason))
 
 
 def fetch_workspaces(token):
@@ -135,16 +141,25 @@ def fetch_teams(token, workspace_gid):
 
 
 def fetch_projects(token, workspace_gid, limit=5):
-    return asana_get(
-        token,
-        "/workspaces/%s/projects" % workspace_gid,
-        {
-            "opt_fields": "name,notes,color,archived,due_on,start_on,"
-                          "created_at,modified_at,owner.name,current_status,"
-                          "current_status.title,public,permalink_url",
-            "limit": limit,
-        },
-    ).get("data", [])
+    out = []
+    params = {
+        "opt_fields": "name,notes,color,archived,due_on,start_on,"
+                      "created_at,modified_at,owner.name,current_status,"
+                      "current_status.title,public,permalink_url",
+        "limit": 100,
+    }
+    path = "/workspaces/%s/projects" % workspace_gid
+    while True:
+        page = asana_get(token, path, params)
+        out.extend(page.get("data", []))
+        if limit and len(out) >= limit:
+            out = out[:limit]
+            break
+        nxt = (page.get("next_page") or {}).get("offset")
+        if not nxt:
+            break
+        params["offset"] = nxt
+    return out
 
 
 def fetch_project_tasks(token, project_gid):
@@ -152,7 +167,7 @@ def fetch_project_tasks(token, project_gid):
     out = []
     params = {
         "opt_fields": "name,completed,completed_at,due_on,start_on,"
-                      "assignee.name,memberships.section.name,notes,permalink_url",
+                      "assignee.name,memberships.section.name,notes,permalink_url,dependencies,dependents",
         "limit": 100,
     }
     path = "/projects/%s/tasks" % project_gid
@@ -339,13 +354,29 @@ def parse_frontmatter(text):
     raw = text[3:end].strip("\n")
     body = text[end + 4:]
     fm = {}
-    for line in raw.splitlines():
+    lines = raw.splitlines()
+    current_key = None
+    current_val = []
+    
+    def save_current():
+        if current_key:
+            val = "\n".join(current_val).strip()
+            if val.startswith('"') and val.endswith('"'): val = val[1:-1]
+            elif val.startswith("'") and val.endswith("'"): val = val[1:-1]
+            fm[current_key] = val
+
+    for line in lines:
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        k, sep, v = line.partition(":")
-        if not sep:
-            continue
-        fm[k.strip()] = v.strip().strip('"').strip("'")
+        if not line.startswith(" ") and not line.startswith("- ") and ":" in line:
+            save_current()
+            k, sep, v = line.partition(":")
+            current_key = k.strip()
+            current_val = [v.strip()] if v.strip() else []
+        else:
+            if current_key:
+                current_val.append(line)
+    save_current()
     return fm, body
 
 
@@ -428,7 +459,7 @@ def render_hermes_block(project, tasks, synced_at, note_name):
 
     # Risks: only what Asana itself signals -- everything else is inference
     risks = []
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now().astimezone().date().isoformat()
     overdue = [t for t in open_tasks if t.get("due_on") and t["due_on"] < today]
     for t in overdue[:10]:
         risks.append("- **[Hecho — Asana]** Vencida: \"%s\" (vence %s)"
@@ -571,7 +602,7 @@ def atomic_write(path, text):
 
 def plan_sync(token, vault, workspace_gid=None, project_limit=5):
     """Compute the full plan. Returns (plan, meta). Writes nothing."""
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = datetime.now().astimezone().replace(microsecond=0)
     synced_at = now.isoformat()
 
     workspaces = fetch_workspaces(token)
@@ -631,9 +662,10 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=5):
             "source_hash": h,
             "_title": p.get("name"),
         }
-        # El override humano nunca se pierde entre syncs.
-        if cur_fm.get("programa_manual"):
-            fm["programa_manual"] = cur_fm["programa_manual"]
+        # Preserve existing manual frontmatter
+        for k, v in cur_fm.items():
+            if k not in fm and not k.startswith("_"):
+                fm[k] = v
         if not cur:
             plan["create"].append({"fm": fm, "project": p, "tasks": tasks,
                                    "filename": note_name + ".md"})
@@ -685,6 +717,17 @@ def apply_plan(vault, plan, meta):
 
 def write_index(vault, plan, meta):
     """Fase 6: LLM Wiki Index."""
+    path = os.path.join(vault, "LLM Wiki Index.md")
+    
+    # Preserve human notes outside HERMES block
+    human_notes = "## Notas humanas\n\n"
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+            m = re.search(r"^##\s+Notas humanas\s*$", content, flags=re.MULTILINE)
+            if m:
+                human_notes = content[m.start():].rstrip() + "\n"
+
     now = meta["synced_at"]
     lines = [
         "---",
@@ -698,6 +741,8 @@ def write_index(vault, plan, meta):
         "",
         "Punto de entrada para Hermes. No es una copia completa de las notas:",
         "es el mapa. Última sincronización: **%s**." % now,
+        "",
+        START,
         "",
         "## Proyectos activos",
         "",
@@ -722,12 +767,12 @@ def write_index(vault, plan, meta):
         "",
     ]
     risk_lines = []
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now().astimezone().date().isoformat()
     for it in all_items:
         p = it.get("project") or {}
         tasks = it.get("tasks", [])
         od = [t for t in tasks
-              if not t.get("completed") and t.get("due_on") and t["due_on"] < today]
+              if not task_is_done(t) and t.get("due_on") and t["due_on"] < today]
         if od:
             risk_lines.append("- [[%s]] — %d tarea(s) vencida(s)"
                               % (slugify(p.get("name")), len(od)))
@@ -738,16 +783,13 @@ def write_index(vault, plan, meta):
         "",
         "Sin notas en `05 Knowledge` todavía.",
         "",
-        "## Agentes registrados",
-        "",
-        "- [[Maha PM]]",
-        "",
-        "## Sistema",
-        "",
-        "- [[Hermes Knowledge Protocol]]",
-        "",
     ]
-    path = os.path.join(vault, "LLM Wiki Index.md")
+    lines.extend([
+        "",
+        END,
+        "",
+        human_notes
+    ])
     atomic_write(path, "\n".join(lines))
     return path
 
@@ -782,11 +824,11 @@ def cmd_query(token, vault, gid):
 
 
 def record_deletion(vault, project_gid, task_name, task_gid, apply=False):
-    """Append a deletion notice to '## Cambios recientes' of a project note.
+    """Append a deletion notice to '## Notas humanas' of a project note.
 
     Implements protocol section 12: the item is removed from the active list
     (which happens naturally on the next sync) and a permanent trace is left
-    here. Never touches anything outside the HERMES markers.
+    here. Never touches anything inside the HERMES markers to preserve source_hash.
     """
     existing = scan_existing_notes(vault)
     cur = existing.get(str(project_gid))
@@ -795,7 +837,7 @@ def record_deletion(vault, project_gid, task_name, task_gid, apply=False):
         return 1
 
     path = cur["path"]
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now().astimezone().date().isoformat()
     line = "- Tarea «%s» eliminada el %s (gid %s)" % (task_name, today, task_gid)
 
     with open(path, "r", encoding="utf-8") as fh:
@@ -810,17 +852,13 @@ def record_deletion(vault, project_gid, task_name, task_gid, apply=False):
         print("Ya registrado (sin cambios): %s" % line)
         return 0
 
-    head, _, tail = text.partition(END)
-    # insert right after the "## Cambios recientes" heading if present,
-    # otherwise immediately before the END marker
-    m = re.search(r"(^##\s+Cambios recientes\s*$)", head, flags=re.MULTILINE)
+    # Escribir en Notas Humanas para no invalidar el source_hash ni ser sobreescrito
+    m = re.search(r"(^##\s+Notas humanas\s*$)", text, flags=re.MULTILINE)
     if m:
         idx = m.end()
-        new_head = head[:idx] + "\n\n" + line + head[idx:]
+        new_text = text[:idx] + "\n\n" + line + text[idx:]
     else:
-        new_head = head.rstrip() + "\n\n" + line + "\n\n"
-
-    new_text = new_head + tail
+        new_text = text.rstrip() + "\n\n## Notas humanas\n\n" + line + "\n"
 
     print("Nota   : %s" % path)
     print("Línea  : %s" % line)
@@ -831,7 +869,7 @@ def record_deletion(vault, project_gid, task_name, task_gid, apply=False):
 
     atomic_write(path, new_text)
     print()
-    print("Registrado en '## Cambios recientes'.")
+    print("Registrado en '## Notas humanas'.")
     return 0
 
 

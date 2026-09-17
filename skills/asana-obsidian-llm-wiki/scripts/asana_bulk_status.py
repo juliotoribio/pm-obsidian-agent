@@ -31,13 +31,19 @@ import urllib.error
 import urllib.request
 
 API = "https://app.asana.com/api/1.0"
-DEFAULT_ENV = os.path.expanduser(
-    "~/.hermes/profiles/maha_pm_agent/.env"
-)
+DEFAULT_ENV = None
 
 
-def load_env(path):
+def load_env(path=None):
     """Parse the .env FILE directly. Do NOT use os.environ — redaction masks it."""
+    if not path:
+        if "HERMES_PROFILE_DIR" in os.environ:
+            path = os.path.join(os.environ["HERMES_PROFILE_DIR"], ".env")
+        elif "HERMES_PROFILE" in os.environ:
+            path = os.path.expanduser(f"~/.hermes/profiles/{os.environ['HERMES_PROFILE']}/.env")
+        else:
+            path = os.path.expanduser("~/.hermes/profiles/default/.env")
+
     env = {}
     if not os.path.exists(path):
         sys.exit(f"FATAL: .env not found at {path}")
