@@ -104,7 +104,7 @@ Asana manda: si existe un Portfolio, se usa ese, y `programa_manual` se ignora.
 
 ```
 00 Portafolio.base          # dashboard raíz — todos los proyectos
-02 Programas/               # una nota por programa (+ su .base)
+01 Programas/               # una nota por programa (+ su .base)
 02 Projects/                # una nota por proyecto de Asana
 04 Decisions/               # decisiones documentadas
 05 Knowledge/               # conocimiento reutilizable

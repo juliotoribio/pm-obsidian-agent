@@ -43,8 +43,6 @@ Cuando se requiera escribir en Asana (e.g. actualizar estado de tareas), se util
   Lee `Completed: TRUE` en el texto de las tareas de Obsidian para forzar el cierre en Asana. *(Ver `references/pm-reporting.md`)*.
 - **Actualizar estatus masivo por fechas:**
   `python3 scripts/asana_bulk_status.py --project <GID> --complete-overdue --apply`
-- **Cerrar tareas por nombre específico:**
-  `python3 scripts/close_task.py <PROJECT_GID> "parte del nombre" --apply`
 
 ## Guías y Políticas de Operación
 

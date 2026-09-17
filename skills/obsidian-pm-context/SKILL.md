@@ -1,6 +1,6 @@
 ---
 name: obsidian-pm-context
-description: "Structure Asana-sourced project knowledge in an Obsidian vault as a 3-level portfolio (Programa -> Proyecto -> Tarea) using Obsidian-native formats: a leveled frontmatter schema, Bases (.base) for live rollups, wikilink parent-child edges, and a per-program JSON Canvas dependency map. Use when designing the vault note schema, adding a portfolio or program dashboard, wiring progress rollups that survive a stale board, or turning flat synced project notes into a navigable, self-aggregating wiki. DEPENDS ON the `obsidian` skill for all .md/.base/.canvas syntax; complements asana-obsidian-llm-wiki (sync mechanics) and pm-workflow (operating style) — this skill owns PM STRUCTURE, `obsidian` owns FORMAT, those own SYNC and STYLE."
+description: "Structure Asana-sourced project knowledge in an Obsidian vault as a 3-level portfolio (Programa -> Proyecto -> Tarea) using Obsidian-native formats: a leveled frontmatter schema, Bases (.base) for live rollups, wikilink parent-child edges, and a per-program JSON Canvas dependency map. Use when designing the vault note schema, adding a portfolio or program dashboard, wiring progress rollups that survive a stale board, or turning flat synced project notes into a navigable, self-aggregating wiki. DEPENDS ON the `obsidian` skill for all .md/.base/.canvas syntax; complements asana-obsidian-llm-wiki (sync mechanics) — this skill owns PM STRUCTURE, `obsidian` owns FORMAT, those own SYNC."
 version: 1.0.0
 platforms: [macos, linux]
 author: adaptado de kepano/obsidian-skills (obsidian-markdown + obsidian-bases + json-canvas)
@@ -11,7 +11,7 @@ tags: [pm, obsidian, bases, portfolio, asana, spanish]
 
 Da **estructura de conocimiento** al vault: convierte notas de proyecto planas en
 un portafolio navegable y auto-agregado. Este skill NO sincroniza (eso es
-`asana-obsidian-llm-wiki`) ni define el tono (eso es `pm-workflow`) — define
+`asana-obsidian-llm-wiki`) — define
 **cómo se modela la información de Programas, Proyectos y Tareas** para que
 Obsidian la agregue solo, con Bases, sin scripts de reporte.
 
@@ -56,9 +56,9 @@ Estructura de carpetas sugerida:
 
 ```
 00 Portafolio.base            # dashboard raíz — todos los proyectos
-02 Programas/<Programa>.md     # nota de programa + ![[<Programa>.base]] embebido
-02 Programas/<Programa>.base   # vista de sus proyectos
-02 Programas/<Programa>.canvas # (opcional) mapa de dependencias
+01 Programas/<Programa>.md     # nota de programa + ![[<Programa>.base]] embebido
+01 Programas/<Programa>.base   # vista de sus proyectos
+01 Programas/<Programa>.canvas # (opcional) mapa de dependencias
 02 Projects/<Proyecto>.md      # nota de proyecto (la que ya genera el sync)
 09 Vistas/Bloqueados.base      # bloqueadores primero, todo el portafolio
 ```
@@ -91,7 +91,7 @@ source_hash:
 ---
 ```
 
-### Programa (`02 Programas/<Programa>.md`)
+### Programa (`01 Programas/<Programa>.md`)
 
 ```yaml
 ---
@@ -186,7 +186,7 @@ views:
       - due_date
 ```
 
-### `02 Programas/<Programa>.base` — vista de un programa (embebible)
+### `01 Programas/<Programa>.base` — vista de un programa (embebible)
 
 Se embebe en la nota del programa con `![[<Programa>.base]]`. Usa `this` para
 autofiltrarse: al embeber, `this` es la nota que la embebe (el programa).
@@ -309,7 +309,7 @@ Crear/replicar el perfil PM: ver "Replicating this for a new agent" en
 `launchctl list | grep hermes` para confirmar PID real). No repetir aquí.
 
 Orden de carga de skills en el agente PM: `obsidian` (formatos, fundación) +
-`pm-workflow` (estilo) + `asana-obsidian-llm-wiki` (sync) + `obsidian-pm-context`
+`asana-obsidian-llm-wiki` (sync) + `obsidian-pm-context`
 (estructura PM). `obsidian-pm-context` no funciona bien sin `obsidian` cargado.
 
 ## Verificación

@@ -10,7 +10,9 @@ En lugar de fallar, el agente deberá utilizar el nombre del Workspace como "Pro
 
 ## 3. Fallas Silenciosas del Gateway / Cron
 A menudo el reporte de `hermes gateway status` dirá que está vivo (cargado), pero los cronjobs no disparan la sincronización de Obsidian.
-- **Diagnóstico Real:** Revisa si el proceso tiene un PID activo usando `launchctl list | grep hermes` o `systemctl --user status`.
+- **Diagnóstico Real:** Revisa si el proceso tiene un PID activo.
+  - En **macOS**: `launchctl list | grep hermes`
+  - En **Linux**: `systemctl --user status hermes-gateway`
 - **Diagnóstico de Cron:** Para validar si un trabajo está realmente corriendo, busca `last_run_at`. Un `last_run_at: null` con estado `enabled: true` significa que la sincronización **nunca** ha corrido.
 
 ## 4. Colisión de Bot de Telegram (Restart Loops)
