@@ -895,7 +895,7 @@ def apply_plan(vault, plan, meta):
         base_path = os.path.join(prog_dir, f"{file_name}.base")
         if not os.path.exists(base_path):
             ws_filter = f"\n    - 'workspace == \"{ws_name}\"'" if ws_name else ""
-        base_content = f"""filters:
+            base_content = f"""filters:
   and:
     - 'type == "proyecto"'{ws_filter}
     - 'programa == "{prog}"'
