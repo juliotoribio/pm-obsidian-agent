@@ -116,7 +116,7 @@ Esto es un comentario humano.
         """Verifica que las notas manuales de una persona sobrevivan sin marcadores HERMES."""
         from asana_obsidian_sync import apply_people_plan, parse_frontmatter
         with tempfile.TemporaryDirectory() as tmp:
-            people_dir = os.path.join(tmp, "03 People")
+            people_dir = os.path.join(tmp, "08 People")
             os.makedirs(people_dir)
             md_path = os.path.join(people_dir, "Ana Perez.md")
             
@@ -554,8 +554,8 @@ Esto es un comentario humano.
             os.makedirs(os.path.join(tmp, "02 Projects"))
             
             # create manual note for Juan without HERMES markers
-            os.makedirs(os.path.join(tmp, "03 People"))
-            juan_path = os.path.join(tmp, "03 People", "Juan.md")
+            os.makedirs(os.path.join(tmp, "08 People"))
+            juan_path = os.path.join(tmp, "08 People", "Juan.md")
             with open(juan_path, "w") as f:
                 f.write("---\nmanual_field: test\n---\n## Notas humanas\n\nMy manual notes")
             
@@ -577,7 +577,7 @@ Esto es un comentario humano.
             self.assertFalse(fm_shared.get("bus_factor_alert"))
             
             # 2. People Check - Maria
-            maria_path = os.path.join(tmp, "03 People", "Maria.md")
+            maria_path = os.path.join(tmp, "08 People", "Maria.md")
             with open(maria_path, "r", encoding="utf-8") as f:
                 content_m = f.read()
             fm_m, body_m = parse_frontmatter(content_m)

@@ -944,8 +944,8 @@ views:
 
 
 def apply_people_plan(vault, people_stats, synced_at):
-    """Genera o actualiza las notas de las personas en 03 People/."""
-    people_dir = os.path.join(vault, "03 People")
+    """Genera o actualiza las notas de las personas en 08 People/."""
+    people_dir = os.path.join(vault, "08 People")
     os.makedirs(people_dir, exist_ok=True)
     
     for assignee, stats in people_stats.items():

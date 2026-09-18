@@ -112,7 +112,7 @@ Sin histórico no hay análisis de desviación, y sin análisis de desviación n
 
 **Qué**
 
-- Carpeta `03 People/` con una nota por persona: `type: persona`, nombre, proyectos donde aparece.
+- Carpeta `08 People/` con una nota por persona: `type: persona`, nombre, proyectos donde aparece.
 - Campos agregados por persona: tareas abiertas, vencidas, bloqueadas, proyectos activos.
 - Vista `09 Vistas/Carga por persona.base` ordenada por tareas abiertas.
 - Señal de bus factor: proyectos con un único assignee en toda su ruta crítica.
