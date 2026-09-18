@@ -91,12 +91,13 @@ python3 skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --apply
 Antes de conectar el agente a tu entorno real, sigue esta secuencia de "primer contacto" para validar que el comportamiento es el esperado sin riesgo de corromper datos:
 
 1. **Dry-Run del Sync**:
+   Al omitir la variable `OBSIDIAN_VAULT_PATH`, el script tomará tu bóveda real configurada en `.env`. Esto es intencional: al ser `--dry-run` no se escribirá nada, pero el plan que verás en consola te mostrará el impacto exacto que tendría sobre tu entorno real.
    ```bash
    python3 skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --dry-run
    ```
    **🚨 Qué revisar antes de autorizar el `--apply`:**
    - **Resolución de programas homónimos**: Revisa que los programas con igual nombre en distintos workspaces (ej. "Transformación Digital") se prefijen correctamente con el nombre del Workspace.
-   - **Sanitización de nombres (Slugs)**: Identifica si hay proyectos con caracteres problemáticos (`[]`, `:`, `/`, `\`). El script debería limpiarlos; si ves que intentará crear notas con corchetes (ej. `[1]`), detén el proceso, ya que romperá los wikilinks en Obsidian.
+   - **Colisiones de nombres (Slugs)**: La función `slugify` limpia caracteres especiales (como emojis o corchetes). Presta atención a proyectos cuyos nombres en Asana sean casi idénticos y solo se diferencien por símbolos; al limpiarse, podrían colapsar en el mismo slug y sobrescribir la misma nota.
    - **Alcance correcto (Scope)**: Verifica que la cantidad de proyectos detectados coincida con tu expectativa. Si procesa muchos más de los esperados, podría estar incluyendo proyectos archivados o workspaces no deseados.
    - **Campos faltantes**: Observa si hay advertencias repetitivas sobre campos personalizados faltantes (ej. RAG, Blockers). Si ocurre masivamente, Asana podría haber cambiado los GIDs internos de esos campos.
 
