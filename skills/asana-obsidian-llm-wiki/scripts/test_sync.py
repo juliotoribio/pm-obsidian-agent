@@ -485,11 +485,11 @@ Esto es un comentario humano.
         with tempfile.TemporaryDirectory() as tmp:
             os.makedirs(os.path.join(tmp, "02 Projects"))
             
-            # create manual note for Juan
+            # create manual note for Juan without HERMES markers
             os.makedirs(os.path.join(tmp, "03 People"))
             juan_path = os.path.join(tmp, "03 People", "Juan.md")
             with open(juan_path, "w") as f:
-                f.write("---\nmanual_field: test\n---\n<!-- HERMES:START -->\nold\n<!-- HERMES:END -->\nMy manual notes")
+                f.write("---\nmanual_field: test\n---\n## Notas humanas\n\nMy manual notes")
             
             plan, meta = plan_sync("fake_token", tmp)
             apply_plan(tmp, plan, meta)
@@ -527,7 +527,7 @@ Esto es un comentario humano.
             self.assertEqual(fm_j.get("open_tasks"), 1) # only t4 is open
             self.assertEqual(fm_j.get("manual_field"), "test")
             self.assertIn("My manual notes", body_j)
-            self.assertNotIn("old", body_j)
+            self.assertIn("## Notas humanas", body_j)
 
 if __name__ == '__main__':
     unittest.main()

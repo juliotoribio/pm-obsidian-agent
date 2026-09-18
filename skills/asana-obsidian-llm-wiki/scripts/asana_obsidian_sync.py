@@ -948,16 +948,23 @@ def apply_people_plan(vault, people_stats, synced_at):
             for k, v in old_fm.items():
                 if k not in fm and not k.startswith("_"):
                     fm[k] = v
-            # extract human notes after HERMES:END
+            # extract human notes using the invariant or fallback to HERMES:END
             human = ""
-            if "<!-- HERMES:END -->" in body:
+            m_h = re.search(r"^##\s+Notas humanas\s*$", content, flags=re.MULTILINE)
+            if m_h:
+                human = content[m_h.start():]
+            elif "<!-- HERMES:END -->" in body:
                 human = body.split("<!-- HERMES:END -->", 1)[1].strip()
+                
+            if not human:
+                human = "## Notas humanas\n\n<!-- Espacio reservado. Hermes nunca sobrescribe esta sección. -->\n"
             
-            new_content = render_frontmatter(fm) + "\n" + block + "\n\n" + human
-            if new_content.strip() != content.strip():
+            new_content = render_frontmatter(fm) + "\n" + block + "\n\n" + human.strip() + "\n"
+            if new_content != content:
                 atomic_write(md_path, new_content)
         else:
-            new_content = render_frontmatter(fm) + "\n" + block + "\n\n"
+            human = "## Notas humanas\n\n<!-- Espacio reservado. Hermes nunca sobrescribe esta sección. -->\n"
+            new_content = render_frontmatter(fm) + "\n" + block + "\n\n" + human
             atomic_write(md_path, new_content)
 
 
