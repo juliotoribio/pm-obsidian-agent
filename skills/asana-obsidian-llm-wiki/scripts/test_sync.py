@@ -4,7 +4,8 @@ import unittest
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
-from asana_obsidian_sync import parse_frontmatter, build_note, reconcile_tasks, source_hash, render_frontmatter, scan_existing_notes
+from unittest.mock import patch
+from asana_obsidian_sync import parse_frontmatter, build_note, reconcile_tasks, source_hash, render_frontmatter, scan_existing_notes, plan_sync, write_index
 
 class TestSync(unittest.TestCase):
     def test_parse_frontmatter(self):
@@ -60,6 +61,40 @@ Hello world!"""
             existing = scan_existing_notes(tmp)
             self.assertIn("1234567890", existing)
             self.assertEqual(existing["1234567890"]["fm"]["asana_gid"], 1234567890)
+
+    @patch("asana_obsidian_sync.fetch_workspaces")
+    @patch("asana_obsidian_sync.fetch_teams")
+    @patch("asana_obsidian_sync.fetch_projects")
+    @patch("asana_obsidian_sync.fetch_project_tasks")
+    @patch("asana_obsidian_sync.fetch_me")
+    @patch("asana_obsidian_sync.fetch_portfolios")
+    def test_corrupt_yaml_skipped_in_plan(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces):
+        mock_workspaces.return_value = [{"gid": "ws1", "name": "Workspace 1"}]
+        mock_teams.return_value = [{"gid": "t1", "name": "Team 1"}]
+        mock_projects.return_value = [{"gid": "9999", "name": "Broken Project"}]
+        mock_tasks.return_value = []
+        mock_me.return_value = {"gid": "me1", "name": "User 1"}
+        mock_portfolios.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            path = os.path.join(tmp, "02 Projects", "Test.md")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("---\nasana_gid: \"9999\"\n[ esto rompe el YAML!\n---\nBody")
+            
+            plan, meta = plan_sync("fake_token", tmp)
+            
+            self.assertEqual(len(plan["create"]), 0)
+            self.assertEqual(len(plan["corrupt"]), 1)
+            self.assertEqual(plan["corrupt"][0]["project"]["gid"], "9999")
+            
+            # Now verify index doesn't include it
+            write_index(tmp, plan, meta)
+            idx_path = os.path.join(tmp, "LLM Wiki Index.md")
+            with open(idx_path, "r", encoding="utf-8") as f:
+                idx_content = f.read()
+            self.assertNotIn("9999", idx_content)
+            self.assertNotIn("broken-project", idx_content)
 
     def test_build_note_preserves_human_notes(self):
         fm = {"type": "proyecto"}
