@@ -263,7 +263,7 @@ views:
 FINANZAS_BASE = """formulas:
   pct_presupuesto: 'if(capex_budget + opex_budget > 0, (spend_ytd / (capex_budget + opex_budget) * 100).round(0), 0)'
   pct_avance: 'if(tasks_total, (tasks_done / tasks_total * 100).round(0), 0)'
-  watermelon_financiero: 'if(capex_budget + opex_budget > 0 && tasks_total, formula.pct_presupuesto - formula.pct_avance > 25, false)'
+  watermelon_financiero: 'if(capex_budget + opex_budget > 0 && tasks_total, (spend_ytd / (capex_budget + opex_budget) * 100).round(0) - (tasks_done / tasks_total * 100).round(0) > 25, false)'
 
 views:
   - type: table
@@ -273,7 +273,9 @@ views:
         - 'type == "proyecto"'
         - 'capex_budget > 0'
         - 'capitalization_status == "Sin clasificar"'
-        - 'opex_budget == null || opex_budget == 0'
+        - or:
+            - 'opex_budget == null'
+            - 'opex_budget == 0'
     order:
       - capex_budget
       - file.name
@@ -285,8 +287,12 @@ views:
     filters:
       and:
         - 'type == "proyecto"'
-        - 'capex_budget == null || capex_budget == 0'
-        - 'opex_budget == null || opex_budget == 0'
+        - or:
+            - 'capex_budget == null'
+            - 'capex_budget == 0'
+        - or:
+            - 'opex_budget == null'
+            - 'opex_budget == 0'
     order:
       - file.name
       - workspace
