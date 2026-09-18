@@ -678,19 +678,20 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
                 pass
 
         color = (p.get("current_status") or {}).get("color")
-        rag_declarado = None
         if color == "green":
             rag_declarado = "Verde"
         elif color == "yellow":
             rag_declarado = "Ámbar"
         elif color == "red":
             rag_declarado = "Rojo"
+        else:
+            rag_declarado = "Sin declarar"
 
         pct = 0
         if roll["tasks_total"] > 0:
             pct = round((roll["tasks_done"] / roll["tasks_total"]) * 100)
 
-        rag_calculado = None
+        rag_calculado = "Sin calcular"
         if roll["tasks_total"] > 0 or new_due:
             sd = slip_days if slip_days != "" else 0
             is_closing_soon = False

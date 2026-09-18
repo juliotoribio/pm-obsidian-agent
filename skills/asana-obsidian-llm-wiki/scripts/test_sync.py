@@ -361,12 +361,12 @@ Esto es un comentario humano.
             self.assertEqual(calc, "Verde")
 
             dec, calc = get_rag("p_no_gov", "No Gov")
-            self.assertIsNone(dec)
+            self.assertEqual(dec, "Sin declarar")
             self.assertEqual(calc, "Rojo")
 
             dec, calc = get_rag("p_grey", "Grey")
-            self.assertIsNone(dec)
-            self.assertIsNone(calc)
+            self.assertEqual(dec, "Sin declarar")
+            self.assertEqual(calc, "Sin calcular")
 
 if __name__ == '__main__':
     unittest.main()

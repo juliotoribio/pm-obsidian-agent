@@ -97,11 +97,13 @@ RAG_DISCREPANCY_BASE = """filters:
   and:
     - 'type == "proyecto"'
     - 'rag_calculado == "Rojo"'
-    - 'rag_declarado == "Verde"'
 
 views:
   - type: table
     name: "🍉 Watermelons (Declarado Verde, Calculado Rojo)"
+    filters:
+      and:
+        - 'rag_declarado == "Verde"'
     order:
       - file.name
       - programa
@@ -113,9 +115,7 @@ views:
     name: "Sin RAG Declarado (Riesgo No Gestionado)"
     filters:
       and:
-        - 'type == "proyecto"'
-        - 'rag_calculado == "Rojo"'
-        - 'rag_declarado == null'
+        - 'rag_declarado == "Sin declarar"'
     order:
       - file.name
       - programa
