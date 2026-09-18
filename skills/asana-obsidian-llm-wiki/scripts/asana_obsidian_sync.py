@@ -146,7 +146,7 @@ def fetch_projects(token, workspace_gid, limit=None):
     params = {
         "opt_fields": "name,notes,color,archived,due_on,start_on,"
                       "created_at,modified_at,owner.name,current_status,"
-                      "current_status.title,public,permalink_url",
+                      "current_status.title,current_status.color,public,permalink_url",
         "limit": 100,
     }
     path = "/workspaces/%s/projects" % workspace_gid
@@ -677,6 +677,37 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
             except ValueError:
                 pass
 
+        color = (p.get("current_status") or {}).get("color")
+        rag_declarado = None
+        if color == "green":
+            rag_declarado = "Verde"
+        elif color == "yellow":
+            rag_declarado = "Ámbar"
+        elif color == "red":
+            rag_declarado = "Rojo"
+
+        pct = 0
+        if roll["tasks_total"] > 0:
+            pct = round((roll["tasks_done"] / roll["tasks_total"]) * 100)
+
+        rag_calculado = None
+        if roll["tasks_total"] > 0 or new_due:
+            sd = slip_days if slip_days != "" else 0
+            is_closing_soon = False
+            if new_due and pct < 100:
+                try:
+                    d_date = datetime.strptime(str(new_due), "%Y-%m-%d").date()
+                    is_closing_soon = (d_date - datetime.now().astimezone().date()).days < 7
+                except ValueError:
+                    pass
+
+            if roll["tasks_blocked"] > 0 or sd >= 15:
+                rag_calculado = "Rojo"
+            elif sd > 0 or is_closing_soon:
+                rag_calculado = "Ámbar"
+            else:
+                rag_calculado = "Verde"
+
         fm = {
             "type": "proyecto",
             "source": "asana",
@@ -688,6 +719,8 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
             "owner": (p.get("owner") or {}).get("name") or "",
             "status": (p.get("current_status") or {}).get("title") or
                       ("archived" if p.get("archived") else "active"),
+            "rag_declarado": rag_declarado,
+            "rag_calculado": rag_calculado,
             "start_date": p.get("start_on") or "",
             "due_date": new_due,
             "baseline_due_date": baseline_due,
@@ -870,7 +903,7 @@ def cmd_query(token, vault, gid):
     print("=== ASANA (hecho operativo) ===")
     p = asana_get(token, "/projects/%s" % gid,
                   {"opt_fields": "name,notes,owner.name,due_on,start_on,archived,"
-                                 "current_status.title,permalink_url,modified_at"})
+                                 "current_status.title,current_status.color,permalink_url,modified_at"})
     proj = p.get("data", {})
     print(json.dumps(proj, indent=2, ensure_ascii=False)[:1500])
 

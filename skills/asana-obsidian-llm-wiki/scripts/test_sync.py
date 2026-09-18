@@ -286,5 +286,87 @@ Esto es un comentario humano.
             self.assertEqual(len(plan2["create"]), 0)
             self.assertEqual(len(plan2["skip"]), 9)
 
+
+    @patch("asana_obsidian_sync.datetime")
+    @patch("asana_obsidian_sync.fetch_workspaces")
+    @patch("asana_obsidian_sync.fetch_teams")
+    @patch("asana_obsidian_sync.fetch_projects")
+    @patch("asana_obsidian_sync.fetch_project_tasks")
+    @patch("asana_obsidian_sync.fetch_me")
+    @patch("asana_obsidian_sync.fetch_portfolios")
+    def test_rag_formulas(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
+        from datetime import datetime, timezone
+        from asana_obsidian_sync import plan_sync, apply_plan
+
+        dt = datetime(2026, 9, 17, 10, 0, tzinfo=timezone.utc)
+        mock_datetime.now.return_value = dt
+        mock_datetime.strptime = datetime.strptime
+        
+        mock_workspaces.return_value = [{"gid": "ws1", "name": "Workspace 1"}]
+        mock_teams.return_value = []
+        mock_me.return_value = {}
+        mock_portfolios.return_value = []
+
+        mock_projects.return_value = [
+            # Coincidencia: Asana Verde, Calculado Verde (0 bloqueos, 0 slip, avance normal)
+            {"gid": "p_match", "name": "Match", "due_on": "2026-09-25", "current_status": {"color": "green"}},
+            # Watermelon: Asana Verde, Calculado Rojo (bloqueado)
+            {"gid": "p_watermelon", "name": "Watermelon", "due_on": "2026-09-25", "current_status": {"color": "green"}},
+            # Falso alarmista: Asana Rojo, Calculado Verde
+            {"gid": "p_alarm", "name": "Alarm", "due_on": "2026-09-25", "current_status": {"color": "red"}},
+            # Falta RAG: Asana null, Calculado Rojo (slip grave)
+            {"gid": "p_no_gov", "name": "No Gov", "due_on": "2026-10-10"},
+            # Grises: Asana null, Calculado null (sin fecha, sin tareas)
+            {"gid": "p_grey", "name": "Grey", "current_status": {}}
+        ]
+
+        def mock_fetch_tasks(token, gid):
+            if gid == "p_match":
+                return [{"gid": "t1", "completed": False, "notes": "Status: Doing\nDependents: None"}]
+            if gid == "p_watermelon":
+                return [{"gid": "t2", "name": "Tarea 2", "completed": False, "notes": "Status: Bloqueado\nDependents: t3"}]
+            if gid == "p_alarm":
+                return [{"gid": "t3", "completed": False, "notes": "Status: Doing\nDependents: None"}]
+            return []
+        
+        mock_tasks.side_effect = mock_fetch_tasks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            
+            # Simularemos que "p_no_gov" tiene slip_days inyectando en las notas base
+            path_no_gov = os.path.join(tmp, "02 Projects", "No Gov.md")
+            with open(path_no_gov, "w") as f:
+                f.write("---\nasana_gid: p_no_gov\nbaseline_due_date: 2026-09-01\n---\n")
+
+            plan, meta = plan_sync("fake_token", tmp)
+            apply_plan(tmp, plan, meta)
+            
+            def get_rag(gid, title):
+                path = os.path.join(tmp, "02 Projects", f"{title}.md")
+                with open(path, "r", encoding="utf-8") as f:
+                    fm, _ = parse_frontmatter(f.read())
+                return fm.get("rag_declarado"), fm.get("rag_calculado")
+
+            dec, calc = get_rag("p_match", "Match")
+            self.assertEqual(dec, "Verde")
+            self.assertEqual(calc, "Verde")
+
+            dec, calc = get_rag("p_watermelon", "Watermelon")
+            self.assertEqual(dec, "Verde")
+            self.assertEqual(calc, "Rojo")
+
+            dec, calc = get_rag("p_alarm", "Alarm")
+            self.assertEqual(dec, "Rojo")
+            self.assertEqual(calc, "Verde")
+
+            dec, calc = get_rag("p_no_gov", "No Gov")
+            self.assertIsNone(dec)
+            self.assertEqual(calc, "Rojo")
+
+            dec, calc = get_rag("p_grey", "Grey")
+            self.assertIsNone(dec)
+            self.assertIsNone(calc)
+
 if __name__ == '__main__':
     unittest.main()

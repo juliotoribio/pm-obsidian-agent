@@ -93,6 +93,37 @@ views:
       - owner
 """
 
+RAG_DISCREPANCY_BASE = """filters:
+  and:
+    - 'type == "proyecto"'
+    - 'rag_calculado == "Rojo"'
+    - 'rag_declarado == "Verde"'
+
+views:
+  - type: table
+    name: "🍉 Watermelons (Declarado Verde, Calculado Rojo)"
+    order:
+      - file.name
+      - programa
+      - slip_days
+      - tasks_blocked
+      - due_date
+
+  - type: table
+    name: "Sin RAG Declarado (Riesgo No Gestionado)"
+    filters:
+      and:
+        - 'type == "proyecto"'
+        - 'rag_calculado == "Rojo"'
+        - 'rag_declarado == null'
+    order:
+      - file.name
+      - programa
+      - slip_days
+      - tasks_blocked
+      - due_date
+"""
+
 PROGRAMA_BASE = """filters:
   and:
     - 'type == "proyecto"'
@@ -161,6 +192,7 @@ def main():
     if args.apply:
         os.makedirs(os.path.join(vault, "09 Vistas"), exist_ok=True)
     write_file("09 Vistas/Bloqueados.base", BLOQUEADOS_BASE)
+    write_file("09 Vistas/Discrepancia RAG.base", RAG_DISCREPANCY_BASE)
 
     if args.apply:
         os.makedirs(os.path.join(vault, "01 Programas"), exist_ok=True)
