@@ -16,11 +16,12 @@ import sys
 FOLDERS = [
     "01 Programas",
     "02 Projects",
+    "04 Log",
     "04 Decisions",
     "05 Knowledge",
     "07 Agents",
     "09 Vistas",
-    "99 System"
+    "99 System/Templates"
 ]
 
 PORTFOLIO_BASE = """filters:

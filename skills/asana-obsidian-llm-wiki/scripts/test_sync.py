@@ -134,5 +134,71 @@ Esto es un comentario humano.
         h3 = source_hash(p, tasks, "Programa B")
         self.assertNotEqual(h1, h3)
 
+    @patch("asana_obsidian_sync.datetime")
+    @patch("asana_obsidian_sync.fetch_workspaces")
+    @patch("asana_obsidian_sync.fetch_teams")
+    @patch("asana_obsidian_sync.fetch_projects")
+    @patch("asana_obsidian_sync.fetch_project_tasks")
+    @patch("asana_obsidian_sync.fetch_me")
+    @patch("asana_obsidian_sync.fetch_portfolios")
+    def test_historical_snapshots_and_baseline(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
+        from datetime import datetime, timezone
+        import asana_obsidian_sync
+
+        mock_workspaces.return_value = [{"gid": "ws1", "name": "Workspace 1"}]
+        mock_teams.return_value = [{"gid": "t1", "name": "Team 1"}]
+        mock_tasks.return_value = []
+        mock_me.return_value = {"gid": "me1", "name": "User 1"}
+        mock_portfolios.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            os.makedirs(os.path.join(tmp, "04 Log"))
+
+            # --- PRIMER SYNC ---
+            mock_projects.return_value = [{"gid": "123", "name": "P1", "due_on": "2026-09-20"}]
+            # Mock datetime para el 2026-09-17
+            dt1 = datetime(2026, 9, 17, 10, 0, tzinfo=timezone.utc)
+            mock_datetime.now.return_value = dt1
+            mock_datetime.strptime = datetime.strptime # pass through strptime
+            
+            plan1, meta1 = plan_sync("fake_token", tmp)
+            asana_obsidian_sync.apply_plan(tmp, plan1, meta1)
+            asana_obsidian_sync.write_snapshot(tmp, plan1, meta1)
+
+            # Verificar note de proyecto
+            path_p1 = os.path.join(tmp, "02 Projects", "P1.md")
+            with open(path_p1, "r", encoding="utf-8") as f:
+                fm1, _ = parse_frontmatter(f.read())
+            self.assertEqual(fm1.get("baseline_due_date"), "2026-09-20")
+            self.assertEqual(fm1.get("replan_count"), 0)
+            self.assertEqual(fm1.get("slip_days"), 0)
+
+            # Verificar Snapshot 1
+            snap1_path = os.path.join(tmp, "04 Log", "2026-09-17.md")
+            self.assertTrue(os.path.exists(snap1_path))
+
+            # --- SEGUNDO SYNC ---
+            # Simulamos que en Asana cambió la fecha de entrega
+            mock_projects.return_value = [{"gid": "123", "name": "P1", "due_on": "2026-09-25"}]
+            # Mock datetime para el 2026-09-18
+            dt2 = datetime(2026, 9, 18, 10, 0, tzinfo=timezone.utc)
+            mock_datetime.now.return_value = dt2
+
+            plan2, meta2 = plan_sync("fake_token", tmp)
+            asana_obsidian_sync.apply_plan(tmp, plan2, meta2)
+            asana_obsidian_sync.write_snapshot(tmp, plan2, meta2)
+
+            # Verificar note de proyecto tras mutación
+            with open(path_p1, "r", encoding="utf-8") as f:
+                fm2, _ = parse_frontmatter(f.read())
+            self.assertEqual(fm2.get("baseline_due_date"), "2026-09-20") # inmutable
+            self.assertEqual(fm2.get("replan_count"), 1)
+            self.assertEqual(fm2.get("slip_days"), 5)
+
+            # Verificar Snapshot 2
+            snap2_path = os.path.join(tmp, "04 Log", "2026-09-18.md")
+            self.assertTrue(os.path.exists(snap2_path))
+
 if __name__ == '__main__':
     unittest.main()

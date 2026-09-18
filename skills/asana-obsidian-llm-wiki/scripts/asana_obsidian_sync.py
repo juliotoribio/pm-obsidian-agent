@@ -375,7 +375,8 @@ def render_frontmatter(fm):
     order = [
         "type", "source", "asana_gid", "asana_url",
         "programa", "programa_manual", "workspace", "owner",
-        "status", "start_date", "due_date",
+        "status", "start_date", "due_date", "baseline_due_date",
+        "replan_count", "slip_days",
         "tasks_total", "tasks_done", "tasks_blocked", "next_due",
         "critical_blocker", "last_synced_at", "source_hash",
     ]
@@ -640,6 +641,32 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
         roll = reconcile_tasks(tasks)
         h = source_hash(p, tasks, programa)
 
+        new_due = p.get("due_on") or ""
+        old_due = cur_fm.get("due_date")
+        
+        baseline_due = cur_fm.get("baseline_due_date")
+        if not baseline_due:
+            baseline_due = new_due
+
+        replan_count = 0
+        if cur_fm.get("replan_count") is not None:
+            try:
+                replan_count = int(cur_fm.get("replan_count"))
+            except ValueError:
+                pass
+        
+        if old_due and new_due and old_due != new_due:
+            replan_count += 1
+
+        slip_days = ""
+        if baseline_due and new_due:
+            try:
+                b_date = datetime.strptime(str(baseline_due), "%Y-%m-%d").date()
+                n_date = datetime.strptime(str(new_due), "%Y-%m-%d").date()
+                slip_days = (n_date - b_date).days
+            except ValueError:
+                pass
+
         fm = {
             "type": "proyecto",
             "source": "asana",
@@ -652,7 +679,10 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
             "status": (p.get("current_status") or {}).get("title") or
                       ("archived" if p.get("archived") else "active"),
             "start_date": p.get("start_on") or "",
-            "due_date": p.get("due_on") or "",
+            "due_date": new_due,
+            "baseline_due_date": baseline_due,
+            "replan_count": replan_count,
+            "slip_days": slip_days,
             "tasks_total": roll["tasks_total"],
             "tasks_done": roll["tasks_done"],
             "tasks_blocked": roll["tasks_blocked"],
@@ -889,6 +919,44 @@ def record_deletion(vault, project_gid, task_name, task_gid, apply=False):
     print("Registrado en '## Notas humanas'.")
     return 0
 
+def write_snapshot(vault, plan, meta):
+    """Escribe un snapshot histórico en 04 Log/YYYY-MM-DD.md"""
+    today = datetime.now().astimezone().date().isoformat()
+    log_dir = os.path.join(vault, "04 Log")
+    if not os.path.isdir(log_dir):
+        os.makedirs(log_dir)
+        
+    path = os.path.join(log_dir, f"{today}.md")
+    
+    lines = [
+        f"# Snapshot: {today}",
+        "",
+        "| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % |",
+        "|---|---|---|---|---|---|---|---|"
+    ]
+    
+    all_items = plan["create"] + plan["update"] + plan["skip"]
+    for it in all_items:
+        fm = it["fm"]
+        gid = fm.get("asana_gid") or ""
+        name = fm.get("_title") or ""
+        name = str(name).replace("|", "\\|")
+        status = fm.get("status") or ""
+        total = fm.get("tasks_total") or 0
+        done = fm.get("tasks_done") or 0
+        blocked = fm.get("tasks_blocked") or 0
+        due = fm.get("due_date") or ""
+        
+        pct = 0
+        if total > 0:
+            pct = round((done / total) * 100)
+            
+        lines.append(f"| {gid} | {name} | {status} | {total} | {done} | {blocked} | {due} | {pct} |")
+        
+    atomic_write(path, "\n".join(lines) + "\n")
+    return path
+
+
 
 def main():
     ap = argparse.ArgumentParser(description="Asana -> Obsidian sync (read-only)")
@@ -966,6 +1034,7 @@ def main():
 
     created, updated = apply_plan(vault, plan, meta)
     idx = write_index(vault, plan, meta)
+    snap = write_snapshot(vault, plan, meta)
     print()
     print("CREADAS   : %d" % len(created))
     for p in created:
@@ -974,6 +1043,7 @@ def main():
     for p in updated:
         print("   ~ %s" % p)
     print("ÍNDICE    : %s" % idx)
+    print("SNAPSHOT  : %s" % snap)
     return 0
 
 
