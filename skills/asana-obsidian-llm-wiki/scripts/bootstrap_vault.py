@@ -17,7 +17,7 @@ FOLDERS = [
     "01 Programas",
     "02 Projects",
     "03 Log",
-    "03 People",
+    "08 People",
     "04 Decisions",
     "05 Knowledge",
     "06 Risks",
@@ -259,8 +259,14 @@ def main():
     args = parser.parse_args()
 
     vault = args.vault
-    if not os.path.isdir(vault):
-        sys.exit(f"ERROR: {vault} no es un directorio válido.")
+    if not os.path.exists(vault):
+        if args.apply:
+            os.makedirs(vault, exist_ok=True)
+            print(f"  + Crear directorio raíz de la bóveda: {vault}")
+        else:
+            print(f"  + Crear directorio raíz de la bóveda (plan): {vault}")
+    elif not os.path.isdir(vault):
+        sys.exit(f"ERROR: {vault} existe pero no es un directorio.")
 
     print(f"Bootstrapping vault en: {vault}")
     
