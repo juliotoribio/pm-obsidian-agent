@@ -115,7 +115,7 @@ views:
 """
 
 PROGRAMA_MD = """---
-type: index
+type: programa
 ---
 # Programa General
 

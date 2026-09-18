@@ -28,17 +28,26 @@ Hello world!"""
         self.assertIn("Hello world!", body)
 
     def test_roundtrip_frontmatter(self):
+        import yaml
         fm = {
             "type": "proyecto",
             "tags": ["estrategico", "capex"],
             "aliases": ["P1"],
-            "status": "active"
+            "status": "active",
+            "meta": {"clave": "valor"}
         }
         rendered = render_frontmatter(fm)
+        # Parse natively using the script
         fm2, _ = parse_frontmatter(rendered + "\nbody")
         self.assertEqual(fm["tags"], fm2["tags"])
         self.assertEqual(fm["aliases"], fm2["aliases"])
         self.assertEqual(fm["status"], fm2["status"])
+        self.assertEqual(fm["meta"], fm2["meta"])
+        
+        # Ensure that it emits valid YAML
+        raw = rendered.strip("-").strip("\n").strip()
+        fm3 = yaml.safe_load(raw)
+        self.assertEqual(fm["meta"], fm3["meta"])
 
     def test_build_note_preserves_human_notes(self):
         fm = {"type": "proyecto"}

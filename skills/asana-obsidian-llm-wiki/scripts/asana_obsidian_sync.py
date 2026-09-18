@@ -353,31 +353,11 @@ def parse_frontmatter(text):
         return {}, text
     raw = text[3:end].strip("\n")
     body = text[end + 4:]
-    fm = {}
-    lines = raw.splitlines()
-    current_key = None
-    
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if not line.startswith(" ") and not line.startswith("- ") and ":" in line:
-            k, sep, v = line.partition(":")
-            current_key = k.strip()
-            v = v.strip()
-            if v:
-                if v.startswith("[") and v.endswith("]"):
-                    # Parse inline list like ["A", "B"]
-                    inner = v[1:-1]
-                    fm[current_key] = [x.strip().strip('"').strip("'") for x in inner.split(",") if x.strip()]
-                else:
-                    fm[current_key] = v.strip('"').strip("'")
-            else:
-                fm[current_key] = []
-        elif line.lstrip().startswith("- "):
-            if current_key and isinstance(fm[current_key], list):
-                val = line.lstrip()[2:].strip().strip('"').strip("'")
-                fm[current_key].append(val)
+    try:
+        import yaml
+        fm = yaml.safe_load(raw) or {}
+    except Exception as e:
+        fm = {}
     return fm, body
 
 
@@ -391,6 +371,7 @@ def yaml_escape(value):
 
 
 def render_frontmatter(fm):
+    import yaml
     order = [
         "type", "source", "asana_gid", "asana_url",
         "programa", "programa_manual", "workspace", "owner",
@@ -398,24 +379,16 @@ def render_frontmatter(fm):
         "tasks_total", "tasks_done", "tasks_blocked", "next_due",
         "critical_blocker", "last_synced_at", "source_hash",
     ]
-    lines = ["---"]
-    
-    def add_field(k, v):
-        if isinstance(v, list):
-            lines.append(f"{k}:")
-            for item in v:
-                lines.append(f"  - {yaml_escape(item)}")
-        else:
-            lines.append(f"{k}: {yaml_escape(v)}")
-
+    out = {}
     for k in order:
         if k in fm:
-            add_field(k, fm[k])
+            out[k] = fm[k]
     for k, v in fm.items():
         if k not in order and not k.startswith("_"):
-            add_field(k, v)
-    lines.append("---")
-    return "\n".join(lines)
+            out[k] = v
+            
+    dumped = yaml.safe_dump(out, default_flow_style=False, sort_keys=False, allow_unicode=True).strip()
+    return f"---\n{dumped}\n---"
 
 
 # ── note rendering ───────────────────────────────────────────────────────
@@ -638,6 +611,7 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
     existing = scan_existing_notes(vault)
 
     plan = {"create": [], "update": [], "skip": []}
+    programs_seen = set()
     for p in projects:
         gid = p["gid"]
         tasks = fetch_project_tasks(token, gid)
@@ -647,6 +621,8 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
         cur = existing.get(gid)
         cur_fm = cur["fm"] if cur else {}
         programa = resolve_programa(cur_fm, program_map, gid, ws_name)
+        if programa:
+            programs_seen.add(programa)
         roll = reconcile_tasks(tasks)
         h = source_hash(p, tasks, programa)
 
@@ -693,7 +669,7 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
         "synced_at": synced_at,
         "existing_count": len(existing),
         "portfolios_available": portfolios_available,
-        "programs": sorted({v for v in program_map.values() if v}),
+        "programs": sorted(list(programs_seen)),
     }
     return plan, meta
 
@@ -702,6 +678,23 @@ def apply_plan(vault, plan, meta):
     created, updated = [], []
     folder = os.path.join(vault, "02 Projects")
     os.makedirs(folder, exist_ok=True)
+    
+    prog_dir = os.path.join(vault, "01 Programas")
+    os.makedirs(prog_dir, exist_ok=True)
+    for prog in meta.get("programs", []):
+        if prog.startswith("[[") and prog.endswith("]]"):
+            name = prog[2:-2]
+        else:
+            name = prog
+        
+        md_path = os.path.join(prog_dir, f"{name}.md")
+        if not os.path.exists(md_path):
+            atomic_write(md_path, f"---\ntype: programa\n---\n# {name}\n\n![[{name}.base]]\n")
+            
+        base_path = os.path.join(prog_dir, f"{name}.base")
+        if not os.path.exists(base_path):
+            base_content = 'filters:\n  and:\n    - \'type == "proyecto"\'\n    - \'programa == this.file.asLink()\'\n\nformulas:\n  pct: \'if(tasks_total, (tasks_done / tasks_total * 100).round(0), 0)\'\n\nviews:\n  - type: table\n    name: "Proyectos del programa"\n    order:\n      - file.name\n      - status\n      - formula.pct\n      - tasks_blocked\n      - due_date\n      - owner\n    summaries:\n      formula.pct: Average\n'
+            atomic_write(base_path, base_content)
 
     for item in plan["create"]:
         path = os.path.join(folder, item["filename"])
