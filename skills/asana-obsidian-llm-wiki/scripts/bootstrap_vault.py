@@ -124,6 +124,36 @@ views:
       - due_date
 """
 
+HITOS_BASE = """filters:
+  and:
+    - 'type == "proyecto"'
+
+views:
+  - type: table
+    name: "🏆 Hitos Próximos"
+    filters:
+      and:
+        - 'next_milestone != null'
+        - 'next_milestone != ""'
+    order:
+      - next_milestone_date
+      - file.name
+      - programa
+
+  - type: table
+    name: "⚠️ Hitos en Riesgo (Calculado Rojo / Ámbar)"
+    filters:
+      and:
+        - 'next_milestone != null'
+        - 'next_milestone != ""'
+        - 'rag_calculado != "Verde"'
+        - 'rag_calculado != "Sin calcular"'
+    order:
+      - next_milestone_date
+      - file.name
+      - programa
+"""
+
 PROGRAMA_BASE = """filters:
   and:
     - 'type == "proyecto"'
@@ -193,6 +223,7 @@ def main():
         os.makedirs(os.path.join(vault, "09 Vistas"), exist_ok=True)
     write_file("09 Vistas/Bloqueados.base", BLOQUEADOS_BASE)
     write_file("09 Vistas/Discrepancia RAG.base", RAG_DISCREPANCY_BASE)
+    write_file("09 Vistas/Hitos.base", HITOS_BASE)
 
     if args.apply:
         os.makedirs(os.path.join(vault, "01 Programas"), exist_ok=True)

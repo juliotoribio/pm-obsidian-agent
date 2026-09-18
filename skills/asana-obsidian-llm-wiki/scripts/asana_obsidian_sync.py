@@ -1044,8 +1044,8 @@ def write_snapshot(vault, plan, meta):
     lines = [
         f"# Snapshot: {today}",
         "",
-        "| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker | Filename |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|"
+        "| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker | Filename | Milestones | Milestones Done | Next Milestone Date |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
     ]
     
     all_items = plan["create"] + plan["update"] + plan["skip"]
@@ -1068,12 +1068,16 @@ def write_snapshot(vault, plan, meta):
         slip = fm.get("slip_days") or 0
         blocker = str(fm.get("critical_blocker") or "").replace("|", "\\|")
         
+        milestones = fm.get("milestones_total") or 0
+        milestones_done = fm.get("milestones_done") or 0
+        next_milestone_date = fm.get("next_milestone_date") or ""
+        
         if "existing" in it:
             filename = os.path.basename(it["existing"]["path"])
         else:
             filename = it.get("filename", "")
-            
-        lines.append(f"| {gid} | {name} | {status} | {total} | {done} | {blocked} | {due} | {pct} | {replans} | {slip} | {blocker} | {filename} |")
+        
+        lines.append(f"| {gid} | {name} | {status} | {total} | {done} | {blocked} | {due} | {pct} | {replans} | {slip} | {blocker} | {filename} | {milestones} | {milestones_done} | {next_milestone_date} |")
         
     atomic_write(path, "\n".join(lines) + "\n")
     return path

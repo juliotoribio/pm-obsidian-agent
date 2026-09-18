@@ -199,6 +199,11 @@ Esto es un comentario humano.
             # Verificar Snapshot 2
             snap2_path = os.path.join(tmp, "03 Log", "2026-09-18.md")
             self.assertTrue(os.path.exists(snap2_path))
+            
+            with open(snap2_path, "r", encoding="utf-8") as f:
+                snap_content = f.read()
+            self.assertIn("| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker | Filename | Milestones | Milestones Done | Next Milestone Date |", snap_content)
+            self.assertIn("| 123 | P1 | active | 0 | 0 | 0 | 2026-09-25 | 0 | 1 | 5 |  | P1.md | 0 | 0 |  |", snap_content)
 
 
     @patch("asana_obsidian_sync.datetime")
