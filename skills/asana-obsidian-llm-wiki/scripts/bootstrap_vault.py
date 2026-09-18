@@ -186,12 +186,10 @@ views:
   - type: table
     name: "Carga de Equipo Consolidada"
     order:
-      - property: open_tasks
-        direction: DESC
-      - property: overdue_tasks
-        direction: DESC
-      - property: file.name
-        direction: ASC
+      - open_tasks
+      - overdue_tasks
+      - blocked_tasks
+      - file.name
     summaries:
       open_tasks: Sum
       overdue_tasks: Sum
@@ -226,10 +224,11 @@ views:
   - type: table
     name: "Registro de Riesgos Abiertos"
     order:
-      - property: formula.exposicion
-        direction: DESC
-      - property: file.name
-        direction: ASC
+      - formula.exposicion
+      - file.name
+      - proyecto
+      - owner
+      - fecha_revision
 """
 
 PROGRAMA_MD = """---
