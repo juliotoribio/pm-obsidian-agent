@@ -77,10 +77,14 @@ Sin histórico no hay análisis de desviación, y sin análisis de desviación n
 
 - Nunca sobrescribir el RAG declarado por el PM: es dato de origen, no derivado.
 - La discrepancia se reporta como hallazgo, jamás se "corrige" en Asana.
+- `rag_declarado` y `rag_calculado` son independientes y cada uno puede ser gris (sin dato).
+- La discrepancia solo se evalúa cuando ambos tienen valor. Nunca inferir uno desde el otro.
+- Si falta `rag_declarado`, el proyecto va a una sección aparte —"sin RAG declarado"— que es hallazgo de gobierno, no de riesgo. No cuenta como watermelon.
 
 **Aceptación**
 
 - Test de la fórmula con tres casos: coincidencia, watermelon (verde/rojo) y falso alarmista (rojo/verde).
+- Dos casos adicionales: declarado ausente con calculado rojo (debe caer en "sin RAG declarado", no en watermelon), y ambos ausentes (gris, sin ruido).
 - El `.base` valida con `yaml.safe_load` y renderiza en Obsidian.
 
 ### 4. Hitos
