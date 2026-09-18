@@ -260,19 +260,59 @@ views:
       - fecha_revision
 """
 
-FINANZAS_BASE = """filters:
-  and:
-    - 'type == "proyecto"'
-    - 'capex_budget > 0'
-    - '!capitalization_status'
-
-views:
+FINANZAS_BASE = """views:
   - type: table
-    name: "Proyectos CAPEX sin estado de capitalización"
+    name: "1. CAPEX sin estado de capitalización"
+    filters:
+      and:
+        - 'type == "proyecto"'
+        - 'capex_budget > 0'
+        - 'capitalization_status == "Sin clasificar"'
     order:
       - capex_budget
       - file.name
       - workspace
+      - owner
+
+  - type: table
+    name: "2. Sin clasificación financiera"
+    filters:
+      and:
+        - 'type == "proyecto"'
+        - '!(capex_budget > 0)'
+        - '!(opex_budget > 0)'
+    order:
+      - file.name
+      - workspace
+      - owner
+
+  - type: table
+    name: "3. Consumo vs Avance (Alerta)"
+    filters:
+      and:
+        - 'type == "proyecto"'
+        - 'watermelon_financiero == true'
+    order:
+      - pct_presupuesto
+      - formula.pct
+      - capex_budget
+      - opex_budget
+      - spend_ytd
+      - file.name
+      - owner
+
+  - type: table
+    name: "4. Mixto CAPEX/OPEX"
+    filters:
+      and:
+        - 'type == "proyecto"'
+        - 'capex_budget > 0'
+        - 'opex_budget > 0'
+        - 'capitalization_status == "Sin clasificar"'
+    order:
+      - capex_budget
+      - opex_budget
+      - file.name
       - owner
 """
 
@@ -332,7 +372,7 @@ def main():
     write_file("09 Vistas/Hitos.base", HITOS_BASE)
     write_file("09 Vistas/Carga por persona.base", CARGA_PERSONA_BASE)
     write_file("09 Vistas/Riesgos abiertos.base", RIESGO_BASE)
-    write_file("09 Vistas/CAPEX sin estado.base", FINANZAS_BASE)
+    write_file("09 Vistas/Finanzas.base", FINANZAS_BASE)
     write_file("99 System/Templates/Plantilla Riesgo.md", RIESGO_MD)
 
     if args.apply:

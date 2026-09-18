@@ -208,7 +208,73 @@ Esto es un comentario humano.
             self.assertEqual(fm.get("opex_budget"), 50000)
             self.assertEqual(fm.get("spend_ytd"), 20000)
             self.assertEqual(fm.get("capitalization_status"), "In Progress")
+            self.assertEqual(fm.get("capitalization_status"), "In Progress")
 
+    @patch("asana_obsidian_sync.datetime")
+    @patch("asana_obsidian_sync.fetch_workspaces")
+    @patch("asana_obsidian_sync.fetch_teams")
+    @patch("asana_obsidian_sync.fetch_projects")
+    @patch("asana_obsidian_sync.fetch_project_tasks")
+    @patch("asana_obsidian_sync.fetch_me")
+    @patch("asana_obsidian_sync.fetch_portfolios")
+    def test_finanzas_logic(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
+        from asana_obsidian_sync import plan_sync, apply_plan, parse_frontmatter
+        from datetime import datetime, timezone
+        
+        mock_datetime.now.return_value = datetime(2026, 9, 18, 10, 0, tzinfo=timezone.utc)
+        mock_workspaces.return_value = [{"gid": "ws1", "name": "Workspace 1"}]
+        mock_teams.return_value = []
+        mock_me.return_value = {}
+        mock_portfolios.return_value = []
+        mock_projects.return_value = [
+            {"gid": "p1", "name": "Presupuesto Cero"},
+            {"gid": "p2", "name": "Campos Ausentes"},
+            {"gid": "p3", "name": "Watermelon"},
+            {"gid": "p4", "name": "Sin Clasificar"}
+        ]
+        # P3 and P4 will have tasks to calculate pct_avance
+        mock_tasks.side_effect = lambda token, gid: [{"gid": "t1", "completed": True}] if gid in ["p3", "p4"] else []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            
+            p1_path = os.path.join(tmp, "02 Projects", "Presupuesto Cero.md")
+            with open(p1_path, "w", encoding="utf-8") as f:
+                f.write("---\nasana_gid: \"p1\"\ncapex_budget: 0\nopex_budget: 0\nspend_ytd: 500\n---\n")
+                
+            p2_path = os.path.join(tmp, "02 Projects", "Campos Ausentes.md")
+            with open(p2_path, "w", encoding="utf-8") as f:
+                f.write("---\nasana_gid: \"p2\"\n---\n")
+
+            p3_path = os.path.join(tmp, "02 Projects", "Watermelon.md")
+            with open(p3_path, "w", encoding="utf-8") as f:
+                # pct_avance will be 100%. pct_presupuesto will be 150%. Watermelon!
+                f.write("---\nasana_gid: \"p3\"\ncapex_budget: 100\nopex_budget: 0\nspend_ytd: 150\ncapitalization_status: OPEX\n---\n")
+
+            p4_path = os.path.join(tmp, "02 Projects", "Sin Clasificar.md")
+            with open(p4_path, "w", encoding="utf-8") as f:
+                f.write("---\nasana_gid: \"p4\"\ncapex_budget: 100\nspend_ytd: 50\n---\n")
+
+            plan, meta = plan_sync("fake_token", tmp)
+            apply_plan(tmp, plan, meta)
+            
+            with open(p1_path, "r", encoding="utf-8") as f: fm1, _ = parse_frontmatter(f.read())
+            self.assertEqual(fm1.get("pct_presupuesto"), 0)
+            self.assertFalse(fm1.get("watermelon_financiero"))
+            self.assertNotIn("capitalization_status", fm1) # 0 budgets don't get "Sin clasificar"
+            
+            with open(p2_path, "r", encoding="utf-8") as f: fm2, _ = parse_frontmatter(f.read())
+            self.assertEqual(fm2.get("pct_presupuesto"), 0)
+            self.assertFalse(fm2.get("watermelon_financiero"))
+            
+            with open(p3_path, "r", encoding="utf-8") as f: fm3, _ = parse_frontmatter(f.read())
+            self.assertEqual(fm3.get("pct_presupuesto"), 150)
+            self.assertTrue(fm3.get("watermelon_financiero")) # 150 > (100 + 20)
+            
+            with open(p4_path, "r", encoding="utf-8") as f: fm4, _ = parse_frontmatter(f.read())
+            self.assertEqual(fm4.get("pct_presupuesto"), 50)
+            self.assertFalse(fm4.get("watermelon_financiero")) # 50 < (100 + 20)
+            self.assertEqual(fm4.get("capitalization_status"), "Sin clasificar")
     @patch("asana_obsidian_sync.datetime")
     @patch("asana_obsidian_sync.fetch_workspaces")
     @patch("asana_obsidian_sync.fetch_teams")

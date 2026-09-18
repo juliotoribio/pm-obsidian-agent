@@ -859,6 +859,35 @@ def plan_sync(token, vault, target_workspaces=None, all_workspaces=False, projec
             for k, v in cur_fm.items():
                 if k not in fm and not k.startswith("_"):
                     fm[k] = v
+            
+            # Financial derived fields
+            capex = fm.get("capex_budget")
+            opex = fm.get("opex_budget")
+            spend = fm.get("spend_ytd")
+            cap_status = fm.get("capitalization_status")
+            
+            try:
+                c_val = float(capex) if capex is not None and str(capex).strip() != "" else 0.0
+            except ValueError:
+                c_val = 0.0
+            try:
+                o_val = float(opex) if opex is not None and str(opex).strip() != "" else 0.0
+            except ValueError:
+                o_val = 0.0
+            try:
+                s_val = float(spend) if spend is not None and str(spend).strip() != "" else 0.0
+            except ValueError:
+                s_val = 0.0
+                
+            pct_presupuesto = 0
+            if (c_val + o_val) > 0:
+                pct_presupuesto = round((s_val / (c_val + o_val)) * 100)
+                
+            fm["pct_presupuesto"] = pct_presupuesto
+            fm["watermelon_financiero"] = pct_presupuesto > (pct + 20)
+            
+            if (c_val > 0 or o_val > 0) and (cap_status is None or str(cap_status).strip() == ""):
+                fm["capitalization_status"] = "Sin clasificar"
             if not cur:
                 plan["create"].append({"fm": fm, "project": p, "tasks": tasks,
                                        "filename": note_name + ".md"})
