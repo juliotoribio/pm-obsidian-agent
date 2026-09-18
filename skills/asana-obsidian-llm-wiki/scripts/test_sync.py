@@ -166,24 +166,48 @@ Esto es un comentario humano.
         h3 = source_hash(p, tasks, "Programa B")
         self.assertNotEqual(h1, h3)
 
-    def test_financial_fields_preserved(self):
-        from asana_obsidian_sync import parse_frontmatter
-        content = """---
-asana_gid: "123"
-capex_budget: 150000
-opex_budget: 50000
-spend_ytd: 20000
-capitalization_status: In Progress
----
-# Test Project
-<!-- HERMES:START -->
-<!-- HERMES:END -->
-"""
-        fm, _ = parse_frontmatter(content)
-        self.assertEqual(fm.get("capex_budget"), 150000)
-        self.assertEqual(fm.get("opex_budget"), 50000)
-        self.assertEqual(fm.get("spend_ytd"), 20000)
-        self.assertEqual(fm.get("capitalization_status"), "In Progress")
+    @patch("asana_obsidian_sync.datetime")
+    @patch("asana_obsidian_sync.fetch_workspaces")
+    @patch("asana_obsidian_sync.fetch_teams")
+    @patch("asana_obsidian_sync.fetch_projects")
+    @patch("asana_obsidian_sync.fetch_project_tasks")
+    @patch("asana_obsidian_sync.fetch_me")
+    @patch("asana_obsidian_sync.fetch_portfolios")
+    def test_financial_fields_preserved(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
+        from asana_obsidian_sync import plan_sync, apply_plan, parse_frontmatter
+        from datetime import datetime, timezone
+        import yaml
+        
+        mock_datetime.now.return_value = datetime(2026, 9, 18, 10, 0, tzinfo=timezone.utc)
+        mock_workspaces.return_value = [{"gid": "ws1", "name": "Workspace 1"}]
+        mock_teams.return_value = []
+        mock_me.return_value = {}
+        mock_portfolios.return_value = []
+        mock_projects.return_value = [{"gid": "p1", "name": "P1"}]
+        mock_tasks.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            
+            p1_path = os.path.join(tmp, "02 Projects", "P1.md")
+            with open(p1_path, "w", encoding="utf-8") as f:
+                f.write("---\nasana_gid: \"p1\"\ncapex_budget: 150000\nopex_budget: 50000\nspend_ytd: 20000\ncapitalization_status: In Progress\n---\n# P1\n<!-- HERMES:START -->\n<!-- HERMES:END -->\n")
+                
+            # RUN SYNC 1
+            plan, meta = plan_sync("fake_token", tmp)
+            apply_plan(tmp, plan, meta)
+            
+            # RUN SYNC 2
+            plan, meta = plan_sync("fake_token", tmp)
+            apply_plan(tmp, plan, meta)
+            
+            with open(p1_path, "r", encoding="utf-8") as f:
+                fm, _ = parse_frontmatter(f.read())
+                
+            self.assertEqual(fm.get("capex_budget"), 150000)
+            self.assertEqual(fm.get("opex_budget"), 50000)
+            self.assertEqual(fm.get("spend_ytd"), 20000)
+            self.assertEqual(fm.get("capitalization_status"), "In Progress")
 
     @patch("asana_obsidian_sync.datetime")
     @patch("asana_obsidian_sync.fetch_workspaces")

@@ -36,6 +36,9 @@ formulas:
   vencida: 'if(due_date, date(due_date) < today() && !(tasks_total && tasks_done == tasks_total), false)'
   dias_para_due: 'if(due_date, (date(due_date) - today()).days, "")'
   salud: 'if(tasks_blocked > 0, "🔴", if(tasks_total && tasks_done == tasks_total, "✅", if(tasks_total && tasks_done / tasks_total >= 0.5, "🟢", "🟡")))'
+  f_capex: 'if(capex_budget, capex_budget, 0)'
+  f_opex: 'if(opex_budget, opex_budget, 0)'
+  f_spend_ytd: 'if(spend_ytd, spend_ytd, 0)'
 
 properties:
   formula.salud:
@@ -46,11 +49,11 @@ properties:
     displayName: "% avance"
   formula.dias_para_due:
     displayName: "Días a vencer"
-  capex_budget:
+  formula.f_capex:
     displayName: "CAPEX"
-  opex_budget:
+  formula.f_opex:
     displayName: "OPEX"
-  spend_ytd:
+  formula.f_spend_ytd:
     displayName: "Spend YTD"
   capitalization_status:
     displayName: "Capitalización"
@@ -72,17 +75,17 @@ views:
       - tasks_blocked
       - due_date
       - formula.dias_para_due
-      - capex_budget
-      - opex_budget
-      - spend_ytd
+      - formula.f_capex
+      - formula.f_opex
+      - formula.f_spend_ytd
       - capitalization_status
       - owner
     summaries:
       formula.pct: Average
       tasks_blocked: Sum
-      capex_budget: Sum
-      opex_budget: Sum
-      spend_ytd: Sum
+      formula.f_capex: Sum
+      formula.f_opex: Sum
+      formula.f_spend_ytd: Sum
 
   - type: table
     name: "En riesgo"
@@ -261,7 +264,7 @@ FINANZAS_BASE = """filters:
   and:
     - 'type == "proyecto"'
     - 'capex_budget > 0'
-    - 'capitalization_status == null'
+    - '!capitalization_status'
 
 views:
   - type: table
