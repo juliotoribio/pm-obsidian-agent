@@ -208,7 +208,6 @@ Esto es un comentario humano.
             self.assertEqual(fm.get("opex_budget"), 50000)
             self.assertEqual(fm.get("spend_ytd"), 20000)
             self.assertEqual(fm.get("capitalization_status"), "In Progress")
-            self.assertEqual(fm.get("capitalization_status"), "In Progress")
 
     @patch("asana_obsidian_sync.datetime")
     @patch("asana_obsidian_sync.fetch_workspaces")
@@ -259,21 +258,15 @@ Esto es un comentario humano.
             apply_plan(tmp, plan, meta)
             
             with open(p1_path, "r", encoding="utf-8") as f: fm1, _ = parse_frontmatter(f.read())
-            self.assertEqual(fm1.get("pct_presupuesto"), 0)
-            self.assertFalse(fm1.get("watermelon_financiero"))
             self.assertNotIn("capitalization_status", fm1) # 0 budgets don't get "Sin clasificar"
             
             with open(p2_path, "r", encoding="utf-8") as f: fm2, _ = parse_frontmatter(f.read())
-            self.assertEqual(fm2.get("pct_presupuesto"), 0)
-            self.assertFalse(fm2.get("watermelon_financiero"))
+            self.assertNotIn("capitalization_status", fm2)
             
             with open(p3_path, "r", encoding="utf-8") as f: fm3, _ = parse_frontmatter(f.read())
-            self.assertEqual(fm3.get("pct_presupuesto"), 150)
-            self.assertTrue(fm3.get("watermelon_financiero")) # 150 > (100 + 20)
+            self.assertEqual(fm3.get("capitalization_status"), "OPEX") # intact
             
             with open(p4_path, "r", encoding="utf-8") as f: fm4, _ = parse_frontmatter(f.read())
-            self.assertEqual(fm4.get("pct_presupuesto"), 50)
-            self.assertFalse(fm4.get("watermelon_financiero")) # 50 < (100 + 20)
             self.assertEqual(fm4.get("capitalization_status"), "Sin clasificar")
     @patch("asana_obsidian_sync.datetime")
     @patch("asana_obsidian_sync.fetch_workspaces")

@@ -260,7 +260,12 @@ views:
       - fecha_revision
 """
 
-FINANZAS_BASE = """views:
+FINANZAS_BASE = """formulas:
+  pct_presupuesto: 'if(capex_budget + opex_budget > 0, (spend_ytd / (capex_budget + opex_budget) * 100).round(0), 0)'
+  pct_avance: 'if(tasks_total, (tasks_done / tasks_total * 100).round(0), 0)'
+  watermelon_financiero: 'if(capex_budget + opex_budget > 0 && tasks_total, formula.pct_presupuesto - formula.pct_avance > 25, false)'
+
+views:
   - type: table
     name: "1. CAPEX sin estado de capitalización"
     filters:
@@ -268,6 +273,7 @@ FINANZAS_BASE = """views:
         - 'type == "proyecto"'
         - 'capex_budget > 0'
         - 'capitalization_status == "Sin clasificar"'
+        - 'opex_budget == null || opex_budget == 0'
     order:
       - capex_budget
       - file.name
@@ -279,8 +285,8 @@ FINANZAS_BASE = """views:
     filters:
       and:
         - 'type == "proyecto"'
-        - '!(capex_budget > 0)'
-        - '!(opex_budget > 0)'
+        - 'capex_budget == null || capex_budget == 0'
+        - 'opex_budget == null || opex_budget == 0'
     order:
       - file.name
       - workspace
@@ -291,10 +297,10 @@ FINANZAS_BASE = """views:
     filters:
       and:
         - 'type == "proyecto"'
-        - 'watermelon_financiero == true'
+        - 'formula.watermelon_financiero == true'
     order:
-      - pct_presupuesto
-      - formula.pct
+      - formula.pct_presupuesto
+      - formula.pct_avance
       - capex_budget
       - opex_budget
       - spend_ytd
