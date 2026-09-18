@@ -66,12 +66,15 @@ def parse_snapshot(path):
                     milestones = 0
                     milestones_done = 0
                     next_milestone_date = ""
+                    workspace = ""
                     if len(parts) >= 17:
                         try: milestones = int(parts[13])
                         except ValueError: milestones = 0
                         try: milestones_done = int(parts[14])
                         except ValueError: milestones_done = 0
                         next_milestone_date = parts[15].strip()
+                    if len(parts) >= 18:
+                        workspace = parts[16].strip()
                         
                     out[gid] = {
                         "name": name,
@@ -87,7 +90,8 @@ def parse_snapshot(path):
                         "filename": filename,
                         "milestones": milestones,
                         "milestones_done": milestones_done,
-                        "next_milestone_date": next_milestone_date
+                        "next_milestone_date": next_milestone_date,
+                        "workspace": workspace
                     }
                     
     return out

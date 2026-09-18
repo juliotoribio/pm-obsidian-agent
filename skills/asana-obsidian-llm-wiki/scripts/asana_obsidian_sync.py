@@ -240,9 +240,11 @@ def resolve_programa(existing_fm, program_map, gid, ws_name=None):
     """
     name = program_map.get(gid)
     if name:
-        return _wikilink(name)
+        return _wikilink(f"{ws_name} - {name}" if ws_name else name)
     manual = (existing_fm or {}).get("programa_manual")
     if manual:
+        if ws_name and not manual.startswith(f"{ws_name} - "):
+            return _wikilink(f"{ws_name} - {manual}")
         return _wikilink(manual)
     if ws_name:
         return _wikilink(ws_name)
@@ -1194,7 +1196,8 @@ def write_snapshot(vault, plan, meta):
         else:
             filename = it.get("filename", "")
         
-        lines.append(f"| {gid} | {name} | {status} | {total} | {done} | {blocked} | {due} | {pct} | {replans} | {slip} | {blocker} | {filename} | {milestones} | {milestones_done} | {next_milestone_date} |")
+        workspace = fm.get("workspace") or ""
+        lines.append(f"| {gid} | {name} | {status} | {total} | {done} | {blocked} | {due} | {pct} | {replans} | {slip} | {blocker} | {filename} | {milestones} | {milestones_done} | {next_milestone_date} | {workspace} |")
         
     atomic_write(path, "\n".join(lines) + "\n")
     return path
