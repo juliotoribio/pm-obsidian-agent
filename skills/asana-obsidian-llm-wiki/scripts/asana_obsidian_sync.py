@@ -565,8 +565,14 @@ def scan_existing_notes(vault):
         path = os.path.join(folder, fn)
         try:
             with open(path, "r", encoding="utf-8") as fh:
-                fm, body = parse_frontmatter(fh.read())
-        except Exception:
+                text = fh.read()
+                fm, body = parse_frontmatter(text)
+        except Exception as e:
+            print(f"WARNING: YAML corrupto ignorado en {fn}: {e}")
+            import re
+            m = re.search(r"^asana_gid:\s*['\"]?(\d+)['\"]?", text, re.MULTILINE)
+            if m:
+                out[str(m.group(1))] = {"path": path, "corrupted": True}
             continue
         gid = fm.get("asana_gid")
         if gid:
@@ -619,6 +625,10 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
         ws_name = ws.get("name")
 
         cur = existing.get(gid)
+        if cur and cur.get("corrupted"):
+            plan["skip"].append({"project": p, "reason": f"Corrupt YAML in {cur['path']}"})
+            continue
+
         cur_fm = cur["fm"] if cur else {}
         programa = resolve_programa(cur_fm, program_map, gid, ws_name)
         if programa:
