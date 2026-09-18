@@ -105,7 +105,7 @@ Antes de conectar el agente a tu entorno real, sigue esta secuencia de "primer c
    Si el plan del paso 1 es correcto, aplícalo contra un vault de prueba, no el real. Esto generará la estructura y el primer snapshot en `03 Log/`.
    ```bash
    mkdir -p /tmp/obsidian-test-vault
-   OBSIDIAN_VAULT_PATH=/tmp/obsidian-test-vault python3 skills/asana-obsidian-llm-wiki/scripts/bootstrap_vault.py
+   python3 skills/asana-obsidian-llm-wiki/scripts/bootstrap_vault.py /tmp/obsidian-test-vault --apply
    OBSIDIAN_VAULT_PATH=/tmp/obsidian-test-vault python3 skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --apply
    ```
 

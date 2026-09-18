@@ -88,8 +88,8 @@ def load_env():
                 if k and k not in found:
                     found[k] = v
 
-    token = found.get("ASANA_ACCESS_TOKEN", "").strip()
-    vault = found.get("OBSIDIAN_VAULT_PATH", "").strip()
+    token = os.environ.get("ASANA_ACCESS_TOKEN", found.get("ASANA_ACCESS_TOKEN", "")).strip()
+    vault = os.environ.get("OBSIDIAN_VAULT_PATH", found.get("OBSIDIAN_VAULT_PATH", "")).strip()
     return token, vault
 
 
