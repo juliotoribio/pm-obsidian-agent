@@ -38,6 +38,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import time
+import yaml
 from datetime import datetime, timezone
 
 ASANA_API = "https://app.asana.com/api/1.0"
@@ -354,10 +355,10 @@ def parse_frontmatter(text):
     raw = text[3:end].strip("\n")
     body = text[end + 4:]
     try:
-        import yaml
         fm = yaml.safe_load(raw) or {}
-    except Exception as e:
-        fm = {}
+    except Exception:
+        # Falla fuerte para YAML inválido para no borrar metadatos.
+        raise
     return fm, body
 
 
@@ -371,7 +372,6 @@ def yaml_escape(value):
 
 
 def render_frontmatter(fm):
-    import yaml
     order = [
         "type", "source", "asana_gid", "asana_url",
         "programa", "programa_manual", "workspace", "owner",
@@ -570,7 +570,7 @@ def scan_existing_notes(vault):
             continue
         gid = fm.get("asana_gid")
         if gid:
-            out[gid] = {"path": path, "fm": fm, "body": body}
+            out[str(gid)] = {"path": path, "fm": fm, "body": body}
     return out
 
 

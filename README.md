@@ -55,7 +55,16 @@ OBSIDIAN_VAULT_PATH=<ruta...vault>
 
 > **Nunca** subas este archivo a un repositorio. Contiene secretos.
 
-### 4. Inicializar la Bóveda (Bootstrap)
+### 4. Instalar dependencias de Python
+
+El motor de sincronización depende de PyYAML para leer y escribir el frontmatter de Obsidian sin corromperlo.
+Dentro de la carpeta del skill, instala las dependencias:
+
+```bash
+pip3 install -r ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/requirements.txt
+```
+
+### 5. Inicializar la Bóveda (Bootstrap)
 
 Si es la primera vez que sincronizas, debes crear la taxonomía base (carpetas y archivos `.base`) que el agente usa.
 Abre tu terminal y ejecuta el script de inicialización apuntando a tu bóveda:
@@ -64,7 +73,7 @@ Abre tu terminal y ejecuta el script de inicialización apuntando a tu bóveda:
 python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/bootstrap_vault.py <ruta...vault> --apply
 ```
 
-### 5. Verificar
+### 6. Verificar
 
 ```bash
 python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --dry-run

@@ -4,7 +4,7 @@ import unittest
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
-from asana_obsidian_sync import parse_frontmatter, build_note, reconcile_tasks, source_hash, render_frontmatter
+from asana_obsidian_sync import parse_frontmatter, build_note, reconcile_tasks, source_hash, render_frontmatter, scan_existing_notes
 
 class TestSync(unittest.TestCase):
     def test_parse_frontmatter(self):
@@ -48,6 +48,18 @@ Hello world!"""
         raw = rendered.strip("-").strip("\n").strip()
         fm3 = yaml.safe_load(raw)
         self.assertEqual(fm["meta"], fm3["meta"])
+
+    def test_scan_existing_notes_int_gid(self):
+        # Create a temp directory simulating a vault
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            path = os.path.join(tmp, "02 Projects", "Test.md")
+            with open(path, "w") as f:
+                f.write("---\nasana_gid: 1234567890\n---\nBody")
+            
+            existing = scan_existing_notes(tmp)
+            self.assertIn("1234567890", existing)
+            self.assertEqual(existing["1234567890"]["fm"]["asana_gid"], 1234567890)
 
     def test_build_note_preserves_human_notes(self):
         fm = {"type": "proyecto"}
