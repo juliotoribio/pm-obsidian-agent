@@ -240,14 +240,21 @@ def resolve_programa(existing_fm, program_map, gid, ws_name=None):
     """
     name = program_map.get(gid)
     if name:
-        return _wikilink(f"{ws_name} - {name}" if ws_name else name)
+        return f"[[{name} ({ws_name})|{name}]]" if ws_name else _wikilink(name)
+    
     manual = (existing_fm or {}).get("programa_manual")
     if manual:
-        if ws_name and not manual.startswith(f"{ws_name} - "):
-            return _wikilink(f"{ws_name} - {manual}")
+        clean = manual[2:-2] if manual.startswith("[[") and manual.endswith("]]") else manual
+        if "|" in clean:
+            clean = clean.split("|")[1].strip()
+        if ws_name and not clean.endswith(f"({ws_name})"):
+            return f"[[{clean} ({ws_name})|{clean}]]"
         return _wikilink(manual)
+        
     if ws_name:
-        return _wikilink(ws_name)
+        # Si no hay nombre de portfolio, el programa genérico del workspace puede ser solo el workspace name
+        return f"[[{ws_name} ({ws_name})|{ws_name}]]"
+        
     return "[[%s]]" % GENERIC_PROGRAM
 
 
@@ -889,16 +896,21 @@ def apply_plan(vault, plan, meta):
     prog_dir = os.path.join(vault, "01 Programas")
     os.makedirs(prog_dir, exist_ok=True)
     for prog in meta.get("programs", []):
+        path_name = prog
+        display_name = prog
         if prog.startswith("[[") and prog.endswith("]]"):
-            name = prog[2:-2]
-        else:
-            name = prog
+            inner = prog[2:-2]
+            if "|" in inner:
+                path_name, display_name = inner.split("|", 1)
+            else:
+                path_name = inner
+                display_name = inner
         
-        md_path = os.path.join(prog_dir, f"{name}.md")
+        md_path = os.path.join(prog_dir, f"{path_name}.md")
         if not os.path.exists(md_path):
-            atomic_write(md_path, f"---\ntype: programa\n---\n# {name}\n\n![[{name}.base]]\n")
+            atomic_write(md_path, f"---\ntype: programa\n---\n# {display_name}\n\n![[{path_name}.base]]\n")
             
-        base_path = os.path.join(prog_dir, f"{name}.base")
+        base_path = os.path.join(prog_dir, f"{path_name}.base")
         if not os.path.exists(base_path):
             base_content = 'filters:\n  and:\n    - \'type == "proyecto"\'\n    - \'programa == this.file.asLink()\'\n\nformulas:\n  pct: \'if(tasks_total, (tasks_done / tasks_total * 100).round(0), 0)\'\n\nviews:\n  - type: table\n    name: "Proyectos del programa"\n    order:\n      - file.name\n      - status\n      - formula.pct\n      - tasks_blocked\n      - due_date\n      - owner\n    summaries:\n      formula.pct: Average\n'
             atomic_write(base_path, base_content)
@@ -1163,8 +1175,8 @@ def write_snapshot(vault, plan, meta):
     lines = [
         f"# Snapshot: {today}",
         "",
-        "| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker | Filename | Milestones | Milestones Done | Next Milestone Date |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
+        "| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker | Filename | Milestones | Milestones Done | Next Milestone Date | Workspace |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
     ]
     
     all_items = plan["create"] + plan["update"] + plan["skip"]
