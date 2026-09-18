@@ -168,7 +168,7 @@ def fetch_project_tasks(token, project_gid):
     out = []
     params = {
         "opt_fields": "name,completed,completed_at,due_on,start_on,"
-                      "assignee.name,memberships.section.name,notes,permalink_url,dependencies,dependents",
+                      "assignee.name,memberships.section.name,notes,permalink_url,dependencies,dependents,resource_subtype",
         "limit": 100,
     }
     path = "/projects/%s/tasks" % project_gid
@@ -279,13 +279,30 @@ def task_is_done(t):
 def reconcile_tasks(tasks):
     """Rollup a project's tasks from RECONCILED state (not the raw flag)."""
     total = len(tasks)
-    done = blocked = 0
+    done = 0
+    blocked = 0
     open_due = []
     blockers = []
+    
+    milestones_total = 0
+    milestones_done = 0
+    open_milestones = []
+
     for t in tasks:
-        if task_is_done(t):
+        is_done = task_is_done(t)
+        if is_done:
             done += 1
+            
+        if t.get("resource_subtype") == "milestone":
+            milestones_total += 1
+            if is_done:
+                milestones_done += 1
+            else:
+                open_milestones.append(t)
+
+        if is_done:
             continue
+            
         pn = parse_task_note(t.get("notes"))
         st = (pn["note_status"] or "").strip().lower()
         if st.startswith("bloque"):                 # "Bloqueado"
@@ -294,12 +311,27 @@ def reconcile_tasks(tasks):
                 blockers.append(t.get("name"))
         if t.get("due_on"):
             open_due.append(t["due_on"])
+            
+    open_milestones_with_date = [m for m in open_milestones if m.get("due_on")]
+    open_milestones_without_date = [m for m in open_milestones if not m.get("due_on")]
+    
+    open_milestones_with_date.sort(key=lambda x: x["due_on"])
+    next_m = None
+    if open_milestones_with_date:
+        next_m = open_milestones_with_date[0]
+    elif open_milestones_without_date:
+        next_m = open_milestones_without_date[0]
+
     return {
         "tasks_total": total,
         "tasks_done": done,
         "tasks_blocked": blocked,
         "next_due": min(open_due) if open_due else "",
         "critical_blocker": blockers[0] if blockers else "",
+        "milestones_total": milestones_total,
+        "milestones_done": milestones_done,
+        "next_milestone": next_m.get("name") if next_m else "",
+        "next_milestone_date": next_m.get("due_on") if next_m else "",
     }
 
 
@@ -378,6 +410,7 @@ def render_frontmatter(fm):
         "status", "start_date", "due_date", "baseline_due_date",
         "replan_count", "slip_days",
         "tasks_total", "tasks_done", "tasks_blocked", "next_due",
+        "milestones_total", "milestones_done", "next_milestone", "next_milestone_date",
         "critical_blocker", "last_synced_at", "source_hash",
     ]
     out = {}
@@ -434,6 +467,13 @@ def render_hermes_block(project, tasks, synced_at, note_name):
     # flag de Asana siga en false (patrón import MS Project).
     open_tasks = [t for t in tasks if not task_is_done(t)]
     done_tasks = [t for t in tasks if task_is_done(t)]
+    
+    open_milestones = [t for t in open_tasks if t.get("resource_subtype") == "milestone"]
+    done_milestones = [t for t in done_tasks if t.get("resource_subtype") == "milestone"]
+    
+    open_normal_tasks = [t for t in open_tasks if t.get("resource_subtype") != "milestone"]
+    done_normal_tasks = [t for t in done_tasks if t.get("resource_subtype") != "milestone"]
+    
     roll = reconcile_tasks(tasks)
 
     # Prioridades activas: open tasks, soonest due first, undated last
@@ -441,13 +481,13 @@ def render_hermes_block(project, tasks, synced_at, note_name):
         return (t.get("due_on") is None, t.get("due_on") or "9999-99-99")
 
     prio_lines = []
-    for t in sorted(open_tasks, key=due_key)[:15]:
+    for t in sorted(open_normal_tasks, key=due_key)[:15]:
         due = t.get("due_on") or "sin fecha"
         who = (t.get("assignee") or {}).get("name") or "sin asignar"
         prio_lines.append("- [ ] %s — vence %s — %s" % (t.get("name"), due, who))
 
     ver_lines = []
-    for t in sorted(done_tasks, key=lambda x: x.get("completed_at") or "", reverse=True)[:8]:
+    for t in sorted(done_normal_tasks, key=lambda x: x.get("completed_at") or "", reverse=True)[:8]:
         ver_lines.append("- [x] %s" % t.get("name"))
 
     # Risks: only what Asana itself signals -- everything else is inference
@@ -505,6 +545,18 @@ def render_hermes_block(project, tasks, synced_at, note_name):
     block.append("")
     block.append("> Datos obtenidos de Asana el %s." % synced_at)
     block.append("")
+    
+    if open_milestones or done_milestones:
+        block.append("## Hitos")
+        block.append("")
+        for t in sorted(open_milestones, key=due_key):
+            due = t.get("due_on") or "sin fecha"
+            who = (t.get("assignee") or {}).get("name") or "sin asignar"
+            block.append("- [ ] %s — vence %s — %s" % (t.get("name"), due, who))
+        for t in sorted(done_milestones, key=lambda x: x.get("completed_at") or "", reverse=True):
+            block.append("- [x] %s" % t.get("name"))
+        block.append("")
+        
     block.append("## Prioridades activas")
     block.append("")
     block.append(md_list(prio_lines, "Sin tareas abiertas en Asana."))
@@ -731,6 +783,10 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
             "tasks_done": roll["tasks_done"],
             "tasks_blocked": roll["tasks_blocked"],
             "next_due": roll["next_due"],
+            "milestones_total": roll["milestones_total"],
+            "milestones_done": roll["milestones_done"],
+            "next_milestone": roll["next_milestone"],
+            "next_milestone_date": roll["next_milestone_date"],
             "critical_blocker": roll["critical_blocker"],
             "last_synced_at": synced_at,
             "source_hash": h,

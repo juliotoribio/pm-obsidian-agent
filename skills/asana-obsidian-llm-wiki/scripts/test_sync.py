@@ -368,5 +368,73 @@ Esto es un comentario humano.
             self.assertEqual(dec, "Sin declarar")
             self.assertEqual(calc, "Sin calcular")
 
+
+    @patch("asana_obsidian_sync.datetime")
+    @patch("asana_obsidian_sync.fetch_workspaces")
+    @patch("asana_obsidian_sync.fetch_teams")
+    @patch("asana_obsidian_sync.fetch_projects")
+    @patch("asana_obsidian_sync.fetch_project_tasks")
+    @patch("asana_obsidian_sync.fetch_me")
+    @patch("asana_obsidian_sync.fetch_portfolios")
+    def test_milestones(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
+        from datetime import datetime, timezone
+        from asana_obsidian_sync import plan_sync, apply_plan
+
+        dt = datetime(2026, 9, 17, 10, 0, tzinfo=timezone.utc)
+        mock_datetime.now.return_value = dt
+        mock_datetime.strptime = datetime.strptime
+        
+        mock_workspaces.return_value = [{"gid": "ws1", "name": "Workspace 1"}]
+        mock_teams.return_value = []
+        mock_me.return_value = {}
+        mock_portfolios.return_value = []
+
+        mock_projects.return_value = [
+            {"gid": "p_milestones", "name": "Project Milestones", "due_on": "2026-12-31"},
+        ]
+
+        def mock_fetch_tasks(token, gid):
+            return [
+                {"gid": "t1", "name": "Hito Pasado", "completed": True, "completed_at": "2026-09-01T10:00:00Z", "resource_subtype": "milestone"},
+                {"gid": "t2", "name": "Hito Futuro Cercano", "completed": False, "due_on": "2026-10-01", "resource_subtype": "milestone"},
+                {"gid": "t3", "name": "Hito Futuro Lejano", "completed": False, "due_on": "2026-11-01", "resource_subtype": "milestone"},
+                {"gid": "t4", "name": "Hito Sin Fecha", "completed": False, "resource_subtype": "milestone"},
+                {"gid": "t5", "name": "Tarea Normal 1", "completed": False},
+                {"gid": "t6", "name": "Tarea Normal 2", "completed": True},
+            ]
+        
+        mock_tasks.side_effect = mock_fetch_tasks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            
+            plan, meta = plan_sync("fake_token", tmp)
+            apply_plan(tmp, plan, meta)
+            
+            path = os.path.join(tmp, "02 Projects", "Project Milestones.md")
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+                
+            fm, body = parse_frontmatter(content)
+            
+            self.assertEqual(fm.get("tasks_total"), 6)
+            self.assertEqual(fm.get("tasks_done"), 2)
+            self.assertEqual(fm.get("milestones_total"), 4)
+            self.assertEqual(fm.get("milestones_done"), 1)
+            self.assertEqual(fm.get("next_milestone"), "Hito Futuro Cercano")
+            self.assertEqual(fm.get("next_milestone_date"), "2026-10-01")
+            
+            # Verificar renderizado en Markdown
+            self.assertIn("## Hitos", body)
+            self.assertIn("- [ ] Hito Futuro Cercano — vence 2026-10-01", body)
+            self.assertIn("- [ ] Hito Futuro Lejano — vence 2026-11-01", body)
+            self.assertIn("- [ ] Hito Sin Fecha — vence sin fecha", body)
+            self.assertIn("- [x] Hito Pasado", body)
+            
+            # Verificar que no aparecen duplicados en Prioridades activas
+            act_section = body.split("## Prioridades activas")[1]
+            self.assertIn("Tarea Normal 1", act_section)
+            self.assertNotIn("Hito Futuro Cercano", act_section)
+
 if __name__ == '__main__':
     unittest.main()
