@@ -206,7 +206,7 @@ Sin histórico no hay análisis de desviación, y sin análisis de desviación n
 - Test de tres corridas consecutivas: la primera emite la alerta, la segunda no la repite, la tercera la vuelve a emitir tras superar el umbral de días.
 - Test de que una recuperación se anuncia una sola vez.
 - Test de que el estado no se modifica en dry-run.
-- Digest generado sobre datos reales, revisado a mano. antes de conectarlo al gateway.
+- Digest generado sobre datos reales, revisado a mano.
 
 ### 10. Gestión de demanda (producto aparte)
 
