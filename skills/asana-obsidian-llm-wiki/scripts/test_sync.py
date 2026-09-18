@@ -202,3 +202,74 @@ Esto es un comentario humano.
 
 if __name__ == '__main__':
     unittest.main()
+
+    @patch("asana_obsidian_sync.datetime")
+    @patch("asana_obsidian_sync.fetch_workspaces")
+    @patch("asana_obsidian_sync.fetch_teams")
+    @patch("asana_obsidian_sync.fetch_projects")
+    @patch("asana_obsidian_sync.fetch_project_tasks")
+    @patch("asana_obsidian_sync.fetch_me")
+    @patch("asana_obsidian_sync.fetch_portfolios")
+    def test_edge_cases_and_slug_collisions(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
+        mock_workspaces.return_value = [{"gid": "ws1", "name": "Workspace 1"}]
+        mock_teams.return_value = [{"gid": "t1", "name": "Team 1"}]
+        mock_me.return_value = {"gid": "me1", "name": "User 1"}
+        mock_portfolios.return_value = []
+
+        # Tareas mockeadas por gid de proyecto
+        def mock_fetch_tasks(token, gid):
+            if gid == "p_all_completed":
+                return [{"gid": "t1", "completed": True}, {"gid": "t2", "completed": True}]
+            return []
+        
+        mock_tasks.side_effect = mock_fetch_tasks
+
+        long_name = "A" * 250
+        
+        mock_projects.return_value = [
+            {"gid": "p_weird", "name": "Project / with | and : and 🚀", "due_on": "2026-09-20"},
+            {"gid": "p_long", "name": long_name, "due_on": "2026-09-20"},
+            {"gid": "p_no_due", "name": "No Due Date"},
+            {"gid": "p_no_tasks", "name": "No Tasks", "due_on": "2026-09-20"},
+            {"gid": "p_all_completed", "name": "All Completed", "due_on": "2026-09-20"},
+            # Colisión de nombres
+            {"gid": "p_col1", "name": "Mi Proyecto", "due_on": "2026-09-20"},
+            {"gid": "p_col2", "name": "Mi/Proyecto", "due_on": "2026-09-20"},
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            os.makedirs(os.path.join(tmp, "03 Log"))
+
+            plan1, meta1 = plan_sync("fake_token", tmp)
+            import asana_obsidian_sync
+            asana_obsidian_sync.apply_plan(tmp, plan1, meta1)
+            
+            # Verificar existencia de archivos en el disco y evitar sobreescritura
+            files = set(os.listdir(os.path.join(tmp, "02 Projects")))
+            
+            # Deberíamos tener 7 archivos distintos
+            self.assertEqual(len(files), 7)
+            
+            # Verificar nombres de archivo (slugify & colisiones)
+            self.assertIn("Project with and and.md", files) # Caracteres raros limpiados
+            self.assertIn("No Due Date.md", files)
+            self.assertIn("No Tasks.md", files)
+            self.assertIn("All Completed.md", files)
+            self.assertIn("Mi Proyecto.md", files)
+            self.assertIn("Mi Proyecto (p_col2).md", files) # Desempate aplicado
+            
+            # Verificar longitud máxima (Mac permite 255 bytes)
+            self.assertIn(long_name + ".md", files)
+            
+            # SIMULAR SEGUNDO SYNC (Incremental)
+            # ¿Se detecta como update o se duplica?
+            plan2, meta2 = plan_sync("fake_token", tmp)
+            
+            # En un comportamiento ideal, p_col2 debería mapearse a la nota existente "Mi Proyecto (p_col2).md".
+            # Verifiquemos si plan_sync se da cuenta.
+            # plan_sync usa scan_existing_notes que usa asana_gid.
+            # Así que SÍ se da cuenta de que existe, porque la nota tiene el asana_gid correcto.
+            
+            self.assertEqual(len(plan2["create"]), 0)
+            self.assertEqual(len(plan2["update"]), 7)
