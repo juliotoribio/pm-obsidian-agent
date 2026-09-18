@@ -226,6 +226,58 @@ Sin histórico no hay análisis de desviación, y sin análisis de desviación n
 
 ---
 
+## Fase 5 — Estandarización
+
+### 11. Configuración externa
+
+**Qué**
+- Archivo `config.yaml` en la raíz del skill con todos los valores hoy hardcodeados: rutas de carpetas del vault, umbrales del RAG calculado, umbral del watermelon financiero (25), días de hito en riesgo (7), umbral de estancamiento del digest, tope de ítems, y los literales de estado.
+
+**Restricciones**
+- El código lee del config, nunca de constantes.
+- Un `config.example.yaml` versionado con los defaults actuales.
+- Si falta el archivo, se usan los defaults sin fallar.
+
+**Aceptación**
+- Test que cargue un config con valores distintos y verifique que el comportamiento cambia (umbral de watermelon en 50 no marca un caso que con 25 sí marcaba).
+
+### 12. Esquema documentado
+
+**Qué**
+- `SCHEMA.md` que documente cada campo del frontmatter: nombre, tipo, quién lo escribe (sync o humano), si es inmutable, y qué significa. Igual para las columnas del snapshot y los tipos de nota (proyecto, programa, persona, riesgo).
+
+**Restricciones**
+- Es contrato, no descripción. Todo campo nuevo se documenta en el mismo commit que lo introduce.
+
+**Aceptación**
+- Revisión manual de que no falta ningún campo que el código escriba.
+
+### 13. Coherencia de idioma
+
+**Qué**
+- Decidir un idioma para el esquema —nombres de carpetas, campos de frontmatter y literales de estado— y aplicarlo de forma consistente. Hoy hay mezcla (02 Projects junto a 01 Programas, capex_budget junto a programa).
+
+**Restricciones**
+- El idioma de la interfaz visible (títulos de vistas, textos del digest) puede ser distinto al del esquema; lo que no puede es que el esquema mismo esté mezclado.
+- Cambiar nombres de carpetas o campos invalida vaults existentes: definir la migración antes de ejecutar.
+
+**Aceptación**
+- Ningún nombre de campo o carpeta fuera del idioma elegido.
+
+### 14. Instalación no intrusiva
+
+**Qué**
+- El bootstrap debe detectar si el vault ya tiene estructura propia y no imponer la suya en silencio. Modo `--dry-run` que muestre qué crearía, y rutas configurables vía el punto 11.
+
+**Restricciones**
+- Nunca sobrescribir archivos existentes.
+- Si una carpeta esperada ya existe con otro nombre, avisar y preguntar en vez de duplicar.
+
+**Aceptación**
+- Test de bootstrap sobre un vault con estructura previa: no sobrescribe nada y reporta lo que encontró.
+
+---
+
 ## Orden recomendado
 
 1. **Punto 1** — desbloquea todo lo demás.
@@ -233,4 +285,8 @@ Sin histórico no hay análisis de desviación, y sin análisis de desviación n
 3. **Puntos 3 y 4** — baratos, visibles, alto impacto ante comité.
 4. **Puntos 5, 6, 7** — módulos nuevos, en ese orden.
 5. **Puntos 8 y 9** — cuando el modelo esté estable.
-6. **Punto 10** — producto aparte, decisión de alcance previa.
+6. **Punto 11** — el que más valor da y no rompe nada.
+7. **Punto 12** — documentar esquema.
+8. **Punto 13** — requiere decisión de idioma y migración.
+9. **Punto 14** — al final de la estandarización.
+10. **Punto 10** — producto aparte, decisión de alcance previa.
