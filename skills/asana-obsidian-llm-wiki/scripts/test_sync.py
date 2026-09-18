@@ -112,6 +112,38 @@ Esto es un comentario humano.
         self.assertIn("Hello", note)
         self.assertNotIn("Old", note)
 
+    def test_apply_people_plan_preserves_human_notes(self):
+        """Verifica que las notas manuales de una persona sobrevivan sin marcadores HERMES."""
+        from asana_obsidian_sync import apply_people_plan, parse_frontmatter
+        with tempfile.TemporaryDirectory() as tmp:
+            people_dir = os.path.join(tmp, "03 People")
+            os.makedirs(people_dir)
+            md_path = os.path.join(people_dir, "Ana Perez.md")
+            
+            # Nota creada manualmente por el usuario antes de cualquier sync
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write("---\nrol: Scrum Master\n---\n## Notas humanas\n\nRegistro del 1:1 con Ana.")
+                
+            people_stats = {
+                "Ana Perez": {
+                    "open_tasks": 5,
+                    "overdue_tasks": 0,
+                    "blocked_tasks": 0,
+                    "active_projects": set()
+                }
+            }
+            
+            apply_people_plan(tmp, people_stats, "2026-09-18")
+            
+            with open(md_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                
+            fm, body = parse_frontmatter(content)
+            self.assertEqual(fm.get("rol"), "Scrum Master")
+            self.assertEqual(fm.get("open_tasks"), 5)
+            self.assertIn("Registro del 1:1 con Ana.", body)
+            self.assertIn("<!-- HERMES:START -->", body)
+
     def test_reconcile_tasks(self):
         tasks = [
             {"name": "Done in Asana", "completed": True, "notes": ""},
