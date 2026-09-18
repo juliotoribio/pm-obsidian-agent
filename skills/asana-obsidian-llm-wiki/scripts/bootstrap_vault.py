@@ -186,9 +186,12 @@ views:
   - type: table
     name: "Carga de Equipo Consolidada"
     order:
-      - open_tasks DESC
-      - overdue_tasks DESC
-      - file.name
+      - property: open_tasks
+        direction: DESC
+      - property: overdue_tasks
+        direction: DESC
+      - property: file.name
+        direction: ASC
     summaries:
       open_tasks: Sum
       overdue_tasks: Sum
@@ -198,8 +201,8 @@ views:
 RIESGO_MD = """---
 type: riesgo
 proyecto: "[[Proyecto]]"
-probabilidad: 1
-impacto: 1
+probabilidad: 1 # Escala 1-5 (1: Muy baja, 5: Muy alta)
+impacto: 1      # Escala 1-5 (1: Marginal, 5: Crítico)
 owner: 
 mitigacion: 
 estado: Abierto
@@ -223,8 +226,10 @@ views:
   - type: table
     name: "Registro de Riesgos Abiertos"
     order:
-      - formula.exposicion DESC
-      - file.name
+      - property: formula.exposicion
+        direction: DESC
+      - property: file.name
+        direction: ASC
 """
 
 PROGRAMA_MD = """---
