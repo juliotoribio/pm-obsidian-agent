@@ -31,6 +31,7 @@ PORTFOLIO_BASE = """filters:
     - 'type == "proyecto"'
 
 formulas:
+  ws_programa: 'if(workspace, workspace + " / " + programa, programa)'
   pct: 'if(tasks_total, (tasks_done / tasks_total * 100).round(0), 0)'
   vencida: 'if(due_date, date(due_date) < today() && !(tasks_total && tasks_done == tasks_total), false)'
   dias_para_due: 'if(due_date, (date(due_date) - today()).days, "")'
@@ -39,6 +40,8 @@ formulas:
 properties:
   formula.salud:
     displayName: ""
+  formula.ws_programa:
+    displayName: "Programa"
   formula.pct:
     displayName: "% avance"
   formula.dias_para_due:
@@ -50,10 +53,11 @@ views:
   - type: table
     name: "Portafolio por programa"
     groupBy:
-      property: programa
+      property: formula.ws_programa
       direction: ASC
     order:
       - formula.salud
+      - workspace
       - file.name
       - status
       - formula.pct
@@ -72,6 +76,7 @@ views:
         - 'tasks_blocked > 0'
         - 'formula.vencida == true'
     order:
+      - workspace
       - file.name
       - programa
       - status
@@ -88,6 +93,7 @@ views:
   - type: table
     name: "Bloqueados en todo el portafolio"
     order:
+      - workspace
       - file.name
       - programa
       - critical_blocker
@@ -107,6 +113,7 @@ views:
       and:
         - 'rag_declarado == "Verde"'
     order:
+      - workspace
       - file.name
       - programa
       - slip_days
@@ -119,6 +126,7 @@ views:
       and:
         - 'rag_declarado == "Sin declarar"'
     order:
+      - workspace
       - file.name
       - programa
       - slip_days
@@ -162,12 +170,14 @@ PROGRAMA_BASE = """filters:
     - 'programa == this.file.asLink()'
 
 formulas:
+  ws_programa: 'if(workspace, workspace + " / " + programa, programa)'
   pct: 'if(tasks_total, (tasks_done / tasks_total * 100).round(0), 0)'
 
 views:
   - type: table
     name: "Proyectos del programa"
     order:
+      - workspace
       - file.name
       - status
       - formula.pct

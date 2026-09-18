@@ -597,5 +597,57 @@ Esto es un comentario humano.
             self.assertIn("My manual notes", body_j)
             self.assertIn("## Notas humanas", body_j)
 
+
+    @patch("asana_obsidian_sync.datetime")
+    @patch("asana_obsidian_sync.fetch_workspaces")
+    @patch("asana_obsidian_sync.fetch_teams")
+    @patch("asana_obsidian_sync.fetch_projects")
+    @patch("asana_obsidian_sync.fetch_project_tasks")
+    @patch("asana_obsidian_sync.fetch_me")
+    @patch("asana_obsidian_sync.fetch_portfolios")
+    def test_multi_workspace_no_collision(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
+        from asana_obsidian_sync import plan_sync, apply_plan, parse_frontmatter
+        from datetime import datetime, timezone
+        
+        mock_datetime.now.return_value = datetime(2026, 9, 18, 10, 0, tzinfo=timezone.utc)
+        mock_workspaces.return_value = [
+            {"gid": "ws1", "name": "Workspace 1"},
+            {"gid": "ws2", "name": "Workspace 2"}
+        ]
+        mock_teams.return_value = []
+        mock_me.return_value = {}
+        mock_portfolios.return_value = []
+        
+        # Simulate different projects coming from different workspaces based on the ws param
+        def fake_projects(token, ws_gid, limit=None):
+            if ws_gid == "ws1":
+                return [{"gid": "p1", "name": "Proyecto A"}]
+            else:
+                return [{"gid": "p2", "name": "Proyecto A"}] # Same name!
+        mock_projects.side_effect = fake_projects
+        mock_tasks.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            
+            plan, meta = plan_sync("fake_token", tmp, all_workspaces=True)
+            apply_plan(tmp, plan, meta)
+            
+            # The files shouldn't collide because they have different gids and slugify prevents it
+            p1_path = os.path.join(tmp, "02 Projects", "Proyecto A.md")
+            p2_path = os.path.join(tmp, "02 Projects", "Proyecto A (p2).md") # Fallback avoids collision
+            
+            self.assertTrue(os.path.exists(p1_path))
+            self.assertTrue(os.path.exists(p2_path))
+            
+            with open(p1_path, "r", encoding="utf-8") as f:
+                fm1, _ = parse_frontmatter(f.read())
+                self.assertEqual(fm1.get("workspace"), "Workspace 1")
+                
+            with open(p2_path, "r", encoding="utf-8") as f:
+                fm2, _ = parse_frontmatter(f.read())
+                self.assertEqual(fm2.get("workspace"), "Workspace 2")
+
+
 if __name__ == '__main__':
     unittest.main()

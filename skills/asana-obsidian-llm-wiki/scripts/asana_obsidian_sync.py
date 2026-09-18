@@ -704,7 +704,7 @@ def render_hermes_people_block(synced_at, name):
     return "\n".join(lines)
 
 
-def plan_sync(token, vault, workspace_gid=None, project_limit=None):
+def plan_sync(token, vault, target_workspaces=None, all_workspaces=False, project_limit=None):
     """Compute the full plan. Returns (plan, meta). Writes nothing."""
     now = datetime.now().astimezone().replace(microsecond=0)
     synced_at = now.isoformat()
@@ -713,158 +713,169 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
     if not workspaces:
         raise AsanaError("No workspaces returned for this token.")
 
-    ws = None
-    if workspace_gid:
-        ws = next((w for w in workspaces if w["gid"] == workspace_gid), None)
-    ws = ws or workspaces[0]
+    if target_workspaces:
+        active_ws = [w for w in workspaces if w["gid"] in target_workspaces]
+        if not active_ws:
+            raise AsanaError("None of the provided workspace GIDs were found.")
+    elif all_workspaces:
+        active_ws = workspaces
+    else:
+        active_ws = [workspaces[0]]
 
-    teams = fetch_teams(token, ws["gid"])
-    projects = fetch_projects(token, ws["gid"], limit=project_limit)
-
-    # Capa Programa: Portfolios nativos si el tier lo permite; si no (402/403),
-    # program_map queda vacío y cada proyecto cae en el bucket genérico salvo
-    # override manual.
     me = fetch_me(token)
-    portfolios = fetch_portfolios(token, ws["gid"], me.get("gid"))
-    portfolios_available = portfolios is not None
-    program_map = build_program_map(token, portfolios) if portfolios else {}
-
-    existing = scan_existing_notes(vault)
 
     plan = {"create": [], "update": [], "skip": [], "corrupt": [], "people_stats": {}}
     programs_seen = set()
-    for p in projects:
-        gid = p["gid"]
-        tasks = fetch_project_tasks(token, gid)
-        note_name = slugify(p.get("name"), fallback_gid=gid)
-        ws_name = ws.get("name")
+    
+    meta = {
+        "teams": [],
+        "projects": [],
+        "portfolios_available": False,
+        "programs": [],
+        "existing_count": 0,
+        "synced_at": synced_at,
+        "workspaces": active_ws
+    }
+    
+    existing = scan_existing_notes(vault)
+    meta["existing_count"] = len(existing)
 
-        cur = existing.get(gid)
-        if cur and cur.get("corrupted"):
-            plan["corrupt"].append({"project": p, "existing": cur})
-            continue
-
-        cur_fm = cur["fm"] if cur else {}
-        programa = resolve_programa(cur_fm, program_map, gid, ws_name)
-        if programa:
-            programs_seen.add(programa)
-        roll = reconcile_tasks(tasks, plan["people_stats"], p.get("name"))
-        h = source_hash(p, tasks, programa)
-
-        new_due = p.get("due_on") or ""
-        old_due = cur_fm.get("due_date")
+    for ws in active_ws:
+        teams = fetch_teams(token, ws["gid"])
+        meta["teams"].extend(teams)
         
-        baseline_due = cur_fm.get("baseline_due_date")
-        if not baseline_due:
-            baseline_due = new_due
-
-        replan_count = 0
-        if cur_fm.get("replan_count") is not None:
-            try:
-                replan_count = int(cur_fm.get("replan_count"))
-            except ValueError:
-                pass
+        projects = fetch_projects(token, ws["gid"], limit=project_limit)
+        meta["projects"].extend(projects)
         
-        # Consider any change (even to/from empty) as a replan, as long as the project already existed
-        if old_due is not None and old_due != new_due:
-            replan_count += 1
+        portfolios = fetch_portfolios(token, ws["gid"], me.get("gid"))
+        if portfolios is not None:
+            meta["portfolios_available"] = True
+        program_map = build_program_map(token, portfolios) if portfolios else {}
 
-        slip_days = ""
-        if baseline_due and new_due:
-            try:
-                b_date = datetime.strptime(str(baseline_due), "%Y-%m-%d").date()
-                n_date = datetime.strptime(str(new_due), "%Y-%m-%d").date()
-                slip_days = (n_date - b_date).days
-            except ValueError:
-                pass
+        for p in projects:
+            gid = p["gid"]
+            tasks = fetch_project_tasks(token, gid)
+            note_name = slugify(p.get("name"), fallback_gid=gid)
+            ws_name = ws.get("name")
 
-        color = (p.get("current_status") or {}).get("color")
-        if color == "green":
-            rag_declarado = "Verde"
-        elif color == "yellow":
-            rag_declarado = "Ámbar"
-        elif color == "red":
-            rag_declarado = "Rojo"
-        else:
-            rag_declarado = "Sin declarar"
+            cur = existing.get(gid)
+            if cur and cur.get("corrupted"):
+                plan["corrupt"].append({"project": p, "existing": cur})
+                continue
 
-        pct = 0
-        if roll["tasks_total"] > 0:
-            pct = round((roll["tasks_done"] / roll["tasks_total"]) * 100)
+            cur_fm = cur["fm"] if cur else {}
+            programa = resolve_programa(cur_fm, program_map, gid, ws_name)
+            if programa:
+                programs_seen.add(programa)
+            roll = reconcile_tasks(tasks, plan["people_stats"], p.get("name"))
+            h = source_hash(p, tasks, programa)
 
-        rag_calculado = "Sin calcular"
-        if roll["tasks_total"] > 0 or new_due:
-            sd = slip_days if slip_days != "" else 0
-            is_closing_soon = False
-            if new_due and pct < 100:
+            new_due = p.get("due_on") or ""
+            old_due = cur_fm.get("due_date")
+        
+            baseline_due = cur_fm.get("baseline_due_date")
+            if not baseline_due:
+                baseline_due = new_due
+
+            replan_count = 0
+            if cur_fm.get("replan_count") is not None:
                 try:
-                    d_date = datetime.strptime(str(new_due), "%Y-%m-%d").date()
-                    is_closing_soon = (d_date - datetime.now().astimezone().date()).days < 7
+                    replan_count = int(cur_fm.get("replan_count"))
+                except ValueError:
+                    pass
+        
+            # Consider any change (even to/from empty) as a replan, as long as the project already existed
+            if old_due is not None and old_due != new_due:
+                replan_count += 1
+
+            slip_days = ""
+            if baseline_due and new_due:
+                try:
+                    b_date = datetime.strptime(str(baseline_due), "%Y-%m-%d").date()
+                    n_date = datetime.strptime(str(new_due), "%Y-%m-%d").date()
+                    slip_days = (n_date - b_date).days
                 except ValueError:
                     pass
 
-            if roll["tasks_blocked"] > 0 or sd >= 15:
-                rag_calculado = "Rojo"
-            elif sd > 0 or is_closing_soon:
-                rag_calculado = "Ámbar"
+            color = (p.get("current_status") or {}).get("color")
+            if color == "green":
+                rag_declarado = "Verde"
+            elif color == "yellow":
+                rag_declarado = "Ámbar"
+            elif color == "red":
+                rag_declarado = "Rojo"
             else:
-                rag_calculado = "Verde"
+                rag_declarado = "Sin declarar"
 
-        fm = {
-            "type": "proyecto",
-            "source": "asana",
-            "asana_gid": gid,
-            "asana_url": p.get("permalink_url") or
-                         ("https://app.asana.com/0/%s" % gid),
-            "programa": programa,
-            "workspace": ws_name,
-            "owner": (p.get("owner") or {}).get("name") or "",
-            "status": (p.get("current_status") or {}).get("title") or
-                      ("archived" if p.get("archived") else "active"),
-            "rag_declarado": rag_declarado,
-            "rag_calculado": rag_calculado,
-            "start_date": p.get("start_on") or "",
-            "due_date": new_due,
-            "baseline_due_date": baseline_due,
-            "replan_count": replan_count,
-            "slip_days": slip_days,
-            "tasks_total": roll["tasks_total"],
-            "tasks_done": roll["tasks_done"],
-            "tasks_blocked": roll["tasks_blocked"],
-            "next_due": roll["next_due"],
-            "milestones_total": roll["milestones_total"],
-            "milestones_done": roll["milestones_done"],
-            "next_milestone": roll["next_milestone"],
-            "next_milestone_date": roll["next_milestone_date"],
-            "critical_blocker": roll["critical_blocker"],
-            "bus_factor_alert": roll["bus_factor_alert"],
-            "last_synced_at": synced_at,
-            "source_hash": h,
-            "_title": p.get("name"),
-        }
-        # Preserve existing manual frontmatter
-        for k, v in cur_fm.items():
-            if k not in fm and not k.startswith("_"):
-                fm[k] = v
-        if not cur:
-            plan["create"].append({"fm": fm, "project": p, "tasks": tasks,
-                                   "filename": note_name + ".md"})
-        elif cur["fm"].get("source_hash") != h:
-            plan["update"].append({"fm": fm, "project": p, "tasks": tasks,
-                                   "existing": cur})
-        else:
-            plan["skip"].append({"fm": fm, "project": p, "tasks": tasks,
-                                 "existing": cur})
+            pct = 0
+            if roll["tasks_total"] > 0:
+                pct = round((roll["tasks_done"] / roll["tasks_total"]) * 100)
 
-    meta = {
-        "workspace": ws,
-        "teams": teams,
-        "projects": projects,
-        "synced_at": synced_at,
-        "existing_count": len(existing),
-        "portfolios_available": portfolios_available,
-        "programs": sorted(list(programs_seen)),
-    }
+            rag_calculado = "Sin calcular"
+            if roll["tasks_total"] > 0 or new_due:
+                sd = slip_days if slip_days != "" else 0
+                is_closing_soon = False
+                if new_due and pct < 100:
+                    try:
+                        d_date = datetime.strptime(str(new_due), "%Y-%m-%d").date()
+                        is_closing_soon = (d_date - datetime.now().astimezone().date()).days < 7
+                    except ValueError:
+                        pass
+
+                if roll["tasks_blocked"] > 0 or sd >= 15:
+                    rag_calculado = "Rojo"
+                elif sd > 0 or is_closing_soon:
+                    rag_calculado = "Ámbar"
+                else:
+                    rag_calculado = "Verde"
+
+            fm = {
+                "type": "proyecto",
+                "source": "asana",
+                "asana_gid": gid,
+                "asana_url": p.get("permalink_url") or
+                             ("https://app.asana.com/0/%s" % gid),
+                "programa": programa,
+                "workspace": ws_name,
+                "owner": (p.get("owner") or {}).get("name") or "",
+                "status": (p.get("current_status") or {}).get("title") or
+                          ("archived" if p.get("archived") else "active"),
+                "rag_declarado": rag_declarado,
+                "rag_calculado": rag_calculado,
+                "start_date": p.get("start_on") or "",
+                "due_date": new_due,
+                "baseline_due_date": baseline_due,
+                "replan_count": replan_count,
+                "slip_days": slip_days,
+                "tasks_total": roll["tasks_total"],
+                "tasks_done": roll["tasks_done"],
+                "tasks_blocked": roll["tasks_blocked"],
+                "next_due": roll["next_due"],
+                "milestones_total": roll["milestones_total"],
+                "milestones_done": roll["milestones_done"],
+                "next_milestone": roll["next_milestone"],
+                "next_milestone_date": roll["next_milestone_date"],
+                "critical_blocker": roll["critical_blocker"],
+                "bus_factor_alert": roll["bus_factor_alert"],
+                "last_synced_at": synced_at,
+                "source_hash": h,
+                "_title": p.get("name"),
+            }
+            # Preserve existing manual frontmatter
+            for k, v in cur_fm.items():
+                if k not in fm and not k.startswith("_"):
+                    fm[k] = v
+            if not cur:
+                plan["create"].append({"fm": fm, "project": p, "tasks": tasks,
+                                       "filename": note_name + ".md"})
+            elif cur["fm"].get("source_hash") != h:
+                plan["update"].append({"fm": fm, "project": p, "tasks": tasks,
+                                       "existing": cur})
+            else:
+                plan["skip"].append({"fm": fm, "project": p, "tasks": tasks,
+                                     "existing": cur})
+
+    meta["programs"] = sorted(list(programs_seen))
     return plan, meta
 
 
@@ -988,7 +999,7 @@ def write_index(vault, plan, meta):
         "type: index",
         "source: hermes",
         "last_synced_at: %s" % now,
-        "workspace: %s" % yaml_escape(meta["workspace"].get("name")),
+        "workspaces: [%s]" % ", ".join([yaml_escape(w.get("name")) for w in meta["workspaces"]]),
         "---",
         "",
         "# LLM Wiki Index",
@@ -1196,8 +1207,9 @@ def main():
                     help="report only (default when --apply absent)")
     ap.add_argument("--apply", action="store_true", help="perform writes")
     ap.add_argument("--query", metavar="GID", help="inspect one project by gid")
-    ap.add_argument("--workspace", metavar="GID", help="force a workspace gid")
-    ap.add_argument("--limit", type=int, default=None, help="max projects (default None/all)")
+    ap.add_argument("--workspace", metavar="GID", nargs="+", help="force specific workspace gid(s)")
+    ap.add_argument("--all-workspaces", action="store_true", help="sync all available workspaces")
+    ap.add_argument("--limit", type=int, default=None, help="max projects per workspace (default None/all)")
     ap.add_argument("--record-deletion", metavar="PROJECT_GID",
                     help="record a deleted task in a project note")
     ap.add_argument("--task-name", metavar="NAME",
@@ -1227,14 +1239,14 @@ def main():
             cmd_query(token, vault, args.query)
             return 0
 
-        plan, meta = plan_sync(token, vault, args.workspace, args.limit)
+        plan, meta = plan_sync(token, vault, args.workspace, args.all_workspaces, args.limit)
     except AsanaError as e:
         print("ERROR de Asana: %s" % e)
         print("No se modificó nada en Obsidian.")
         return 1
 
-    ws = meta["workspace"]
-    print("Workspace : %s (%s)" % (ws.get("name"), ws["gid"]))
+    ws_names = [w.get("name") for w in meta["workspaces"]]
+    print("Workspaces: %s" % (", ".join(ws_names)))
     print("Equipos   : %d" % len(meta["teams"]))
     print("Proyectos : %d detectados" % len(meta["projects"]))
     if meta["portfolios_available"]:
