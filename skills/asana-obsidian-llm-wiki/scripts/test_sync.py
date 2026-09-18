@@ -173,6 +173,42 @@ Esto es un comentario humano.
     @patch("asana_obsidian_sync.fetch_project_tasks")
     @patch("asana_obsidian_sync.fetch_me")
     @patch("asana_obsidian_sync.fetch_portfolios")
+    def test_sync_ignores_risks_folder(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
+        from asana_obsidian_sync import plan_sync, apply_plan
+        from datetime import datetime, timezone
+        
+        mock_datetime.now.return_value = datetime(2026, 9, 18, 10, 0, tzinfo=timezone.utc)
+        mock_workspaces.return_value = [{"gid": "ws1", "name": "Workspace 1"}]
+        mock_teams.return_value = []
+        mock_me.return_value = {}
+        mock_portfolios.return_value = []
+        mock_projects.return_value = [{"gid": "p1", "name": "P1"}]
+        mock_tasks.return_value = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            
+            # Crear riesgo artificialmente
+            os.makedirs(os.path.join(tmp, "06 Risks"))
+            riesgo_path = os.path.join(tmp, "06 Risks", "Riesgo-P1.md")
+            with open(riesgo_path, "w", encoding="utf-8") as f:
+                f.write("---\ntype: riesgo\n---\nDetalles del riesgo")
+                
+            plan, meta = plan_sync("fake_token", tmp)
+            apply_plan(tmp, plan, meta)
+            
+            # Verificar que existe intacto
+            self.assertTrue(os.path.exists(riesgo_path))
+            with open(riesgo_path, "r", encoding="utf-8") as f:
+                self.assertEqual(f.read(), "---\ntype: riesgo\n---\nDetalles del riesgo")
+
+    @patch("asana_obsidian_sync.datetime")
+    @patch("asana_obsidian_sync.fetch_workspaces")
+    @patch("asana_obsidian_sync.fetch_teams")
+    @patch("asana_obsidian_sync.fetch_projects")
+    @patch("asana_obsidian_sync.fetch_project_tasks")
+    @patch("asana_obsidian_sync.fetch_me")
+    @patch("asana_obsidian_sync.fetch_portfolios")
     def test_historical_snapshots_and_baseline(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
         from datetime import datetime, timezone
         import asana_obsidian_sync

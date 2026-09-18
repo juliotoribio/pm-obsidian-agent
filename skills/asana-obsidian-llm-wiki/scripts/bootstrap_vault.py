@@ -20,6 +20,7 @@ FOLDERS = [
     "03 People",
     "04 Decisions",
     "05 Knowledge",
+    "06 Risks",
     "07 Agents",
     "09 Vistas",
     "99 System/Templates"
@@ -194,6 +195,38 @@ views:
       blocked_tasks: Sum
 """
 
+RIESGO_MD = """---
+type: riesgo
+proyecto: "[[Proyecto]]"
+probabilidad: 1
+impacto: 1
+owner: 
+mitigacion: 
+estado: Abierto
+fecha_revision: 
+---
+
+# Riesgo
+
+**Descripción corta del riesgo.**
+"""
+
+RIESGO_BASE = """filters:
+  and:
+    - 'type == "riesgo"'
+    - 'estado == "Abierto"'
+
+formulas:
+  exposicion: 'probabilidad * impacto'
+
+views:
+  - type: table
+    name: "Registro de Riesgos Abiertos"
+    order:
+      - formula.exposicion DESC
+      - file.name
+"""
+
 PROGRAMA_MD = """---
 type: programa
 ---
@@ -243,6 +276,8 @@ def main():
     write_file("09 Vistas/Discrepancia RAG.base", RAG_DISCREPANCY_BASE)
     write_file("09 Vistas/Hitos.base", HITOS_BASE)
     write_file("09 Vistas/Carga por persona.base", CARGA_PERSONA_BASE)
+    write_file("09 Vistas/Riesgos abiertos.base", RIESGO_BASE)
+    write_file("99 System/Templates/Plantilla Riesgo.md", RIESGO_MD)
 
     if args.apply:
         os.makedirs(os.path.join(vault, "01 Programas"), exist_ok=True)

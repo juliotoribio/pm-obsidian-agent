@@ -630,7 +630,8 @@ def build_note(fm, hermes_block, existing_body=None):
             human = existing_body[m.start():].rstrip() + "\n"
     if not human:
         human = ("## Notas humanas\n\n"
-                 "<!-- Espacio reservado. Hermes nunca sobrescribe esta sección. -->\n")
+                 "<!-- Espacio reservado. Hermes nunca sobrescribe esta sección. -->\n\n"
+                 "## Riesgos formales\n\n")
 
     name = fm.get("type") and "" or ""
     parts = [
