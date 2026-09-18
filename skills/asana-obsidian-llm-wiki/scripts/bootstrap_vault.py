@@ -46,6 +46,14 @@ properties:
     displayName: "% avance"
   formula.dias_para_due:
     displayName: "Días a vencer"
+  capex_budget:
+    displayName: "CAPEX"
+  opex_budget:
+    displayName: "OPEX"
+  spend_ytd:
+    displayName: "Spend YTD"
+  capitalization_status:
+    displayName: "Capitalización"
   status:
     displayName: Estado
 
@@ -64,10 +72,17 @@ views:
       - tasks_blocked
       - due_date
       - formula.dias_para_due
+      - capex_budget
+      - opex_budget
+      - spend_ytd
+      - capitalization_status
       - owner
     summaries:
       formula.pct: Average
       tasks_blocked: Sum
+      capex_budget: Sum
+      opex_budget: Sum
+      spend_ytd: Sum
 
   - type: table
     name: "En riesgo"
@@ -242,6 +257,22 @@ views:
       - fecha_revision
 """
 
+FINANZAS_BASE = """filters:
+  and:
+    - 'type == "proyecto"'
+    - 'capex_budget > 0'
+    - 'capitalization_status == null'
+
+views:
+  - type: table
+    name: "Proyectos CAPEX sin estado de capitalización"
+    order:
+      - capex_budget
+      - file.name
+      - workspace
+      - owner
+"""
+
 PROGRAMA_MD = """---
 type: programa
 ---
@@ -298,6 +329,7 @@ def main():
     write_file("09 Vistas/Hitos.base", HITOS_BASE)
     write_file("09 Vistas/Carga por persona.base", CARGA_PERSONA_BASE)
     write_file("09 Vistas/Riesgos abiertos.base", RIESGO_BASE)
+    write_file("09 Vistas/CAPEX sin estado.base", FINANZAS_BASE)
     write_file("99 System/Templates/Plantilla Riesgo.md", RIESGO_MD)
 
     if args.apply:

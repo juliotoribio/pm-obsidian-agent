@@ -166,6 +166,25 @@ Esto es un comentario humano.
         h3 = source_hash(p, tasks, "Programa B")
         self.assertNotEqual(h1, h3)
 
+    def test_financial_fields_preserved(self):
+        from asana_obsidian_sync import parse_frontmatter
+        content = """---
+asana_gid: "123"
+capex_budget: 150000
+opex_budget: 50000
+spend_ytd: 20000
+capitalization_status: In Progress
+---
+# Test Project
+<!-- HERMES:START -->
+<!-- HERMES:END -->
+"""
+        fm, _ = parse_frontmatter(content)
+        self.assertEqual(fm.get("capex_budget"), 150000)
+        self.assertEqual(fm.get("opex_budget"), 50000)
+        self.assertEqual(fm.get("spend_ytd"), 20000)
+        self.assertEqual(fm.get("capitalization_status"), "In Progress")
+
     @patch("asana_obsidian_sync.datetime")
     @patch("asana_obsidian_sync.fetch_workspaces")
     @patch("asana_obsidian_sync.fetch_teams")

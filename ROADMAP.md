@@ -127,7 +127,7 @@ Sin histórico no hay análisis de desviación, y sin análisis de desviación n
 
 - Test con tres proyectos y dos personas que verifique conteos correctos por persona y detección de bus factor.
 
-### 6. Dimensión financiera
+### 6. Dimensión financiera (COMPLETADO)
 
 **Qué**
 
