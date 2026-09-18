@@ -17,6 +17,7 @@ FOLDERS = [
     "01 Programas",
     "02 Projects",
     "03 Log",
+    "03 People",
     "04 Decisions",
     "05 Knowledge",
     "07 Agents",
@@ -176,6 +177,23 @@ views:
       formula.pct: Average
 """
 
+CARGA_PERSONA_BASE = """filters:
+  and:
+    - 'type == "persona"'
+
+views:
+  - type: table
+    name: "Carga de Equipo Consolidada"
+    order:
+      - open_tasks DESC
+      - overdue_tasks DESC
+      - file.name
+    summaries:
+      open_tasks: Sum
+      overdue_tasks: Sum
+      blocked_tasks: Sum
+"""
+
 PROGRAMA_MD = """---
 type: programa
 ---
@@ -224,6 +242,7 @@ def main():
     write_file("09 Vistas/Bloqueados.base", BLOQUEADOS_BASE)
     write_file("09 Vistas/Discrepancia RAG.base", RAG_DISCREPANCY_BASE)
     write_file("09 Vistas/Hitos.base", HITOS_BASE)
+    write_file("09 Vistas/Carga por persona.base", CARGA_PERSONA_BASE)
 
     if args.apply:
         os.makedirs(os.path.join(vault, "01 Programas"), exist_ok=True)

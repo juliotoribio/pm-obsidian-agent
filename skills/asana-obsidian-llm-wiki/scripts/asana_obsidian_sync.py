@@ -276,7 +276,7 @@ def task_is_done(t):
     return bool(t.get("completed")) or (parse_task_note(t.get("notes"))["note_completed"] is True)
 
 
-def reconcile_tasks(tasks):
+def reconcile_tasks(tasks, people_stats=None, project_name=None):
     """Rollup a project's tasks from RECONCILED state (not the raw flag)."""
     total = len(tasks)
     done = 0
@@ -287,6 +287,8 @@ def reconcile_tasks(tasks):
     milestones_total = 0
     milestones_done = 0
     open_milestones = []
+    
+    open_assignees = set()
 
     for t in tasks:
         is_done = task_is_done(t)
@@ -303,12 +305,35 @@ def reconcile_tasks(tasks):
         if is_done:
             continue
             
+        assignee = (t.get("assignee") or {}).get("name")
+        if assignee:
+            open_assignees.add(assignee)
+        else:
+            open_assignees.add("sin asignar")
+            
         pn = parse_task_note(t.get("notes"))
         st = (pn["note_status"] or "").strip().lower()
         if st.startswith("bloque"):                 # "Bloqueado"
             blocked += 1
-            if pn["note_dependents"]:               # bloquea a algo aguas abajo
-                blockers.append(t.get("name"))
+            blockers.append((t.get("name"), t.get("notes")))
+            
+        if people_stats is not None and project_name and assignee:
+            stats = people_stats.setdefault(assignee, {
+                "open_tasks": 0,
+                "overdue_tasks": 0,
+                "blocked_tasks": 0,
+                "active_projects": set()
+            })
+            stats["open_tasks"] += 1
+            stats["active_projects"].add(f"[[{project_name}]]")
+            
+            today = datetime.now().astimezone().date().isoformat()
+            if t.get("due_on") and t["due_on"] < today:
+                stats["overdue_tasks"] += 1
+                
+            if st.startswith("bloque"):
+                stats["blocked_tasks"] += 1
+
         if t.get("due_on"):
             open_due.append(t["due_on"])
             
@@ -322,16 +347,25 @@ def reconcile_tasks(tasks):
     elif open_milestones_without_date:
         next_m = open_milestones_without_date[0]
 
+    next_milestone = next_m.get("name") if next_m else ""
+    next_milestone_date = next_m.get("due_on") if next_m else ""
+    
+    bus_factor_alert = False
+    if total > done and len(open_assignees) == 1 and "sin asignar" not in open_assignees:
+        bus_factor_alert = True
+
     return {
         "tasks_total": total,
         "tasks_done": done,
         "tasks_blocked": blocked,
         "next_due": min(open_due) if open_due else "",
-        "critical_blocker": blockers[0] if blockers else "",
+        "critical_blocker": blockers[0][0] if blockers else "",
+        "blockers": blockers,
         "milestones_total": milestones_total,
         "milestones_done": milestones_done,
-        "next_milestone": next_m.get("name") if next_m else "",
-        "next_milestone_date": next_m.get("due_on") if next_m else "",
+        "next_milestone": next_milestone,
+        "next_milestone_date": next_milestone_date,
+        "bus_factor_alert": bus_factor_alert,
     }
 
 
@@ -655,6 +689,20 @@ def atomic_write(path, text):
 
 # ── main sync ────────────────────────────────────────────────────────────
 
+def render_hermes_people_block(synced_at, name):
+    lines = [
+        "<!-- HERMES:START -->",
+        "> [!info]- 🤖 Sincronizado por Hermes",
+        f"> Último sync: {synced_at}",
+        "> _Cualquier cambio dentro de este bloque será sobrescrito. Escribe tus notas debajo._",
+        "",
+        f"## Carga Consolidada de {name}",
+        "",
+        "<!-- HERMES:END -->",
+    ]
+    return "\n".join(lines)
+
+
 def plan_sync(token, vault, workspace_gid=None, project_limit=None):
     """Compute the full plan. Returns (plan, meta). Writes nothing."""
     now = datetime.now().astimezone().replace(microsecond=0)
@@ -682,7 +730,7 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
 
     existing = scan_existing_notes(vault)
 
-    plan = {"create": [], "update": [], "skip": [], "corrupt": []}
+    plan = {"create": [], "update": [], "skip": [], "corrupt": [], "people_stats": {}}
     programs_seen = set()
     for p in projects:
         gid = p["gid"]
@@ -699,7 +747,7 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
         programa = resolve_programa(cur_fm, program_map, gid, ws_name)
         if programa:
             programs_seen.add(programa)
-        roll = reconcile_tasks(tasks)
+        roll = reconcile_tasks(tasks, plan["people_stats"], p.get("name"))
         h = source_hash(p, tasks, programa)
 
         new_due = p.get("due_on") or ""
@@ -788,6 +836,7 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
             "next_milestone": roll["next_milestone"],
             "next_milestone_date": roll["next_milestone_date"],
             "critical_blocker": roll["critical_blocker"],
+            "bus_factor_alert": roll["bus_factor_alert"],
             "last_synced_at": synced_at,
             "source_hash": h,
             "_title": p.get("name"),
@@ -860,7 +909,56 @@ def apply_plan(vault, plan, meta):
         atomic_write(path, text)
         updated.append(path)
 
+    meta["created"] = created
+    meta["updated"] = updated
     return created, updated
+
+
+def apply_people_plan(vault, people_stats, synced_at):
+    """Genera o actualiza las notas de las personas en 03 People/."""
+    people_dir = os.path.join(vault, "03 People")
+    os.makedirs(people_dir, exist_ok=True)
+    
+    for assignee, stats in people_stats.items():
+        if not assignee or assignee == "sin asignar":
+            continue
+            
+        safe_name = slugify(assignee, fallback_gid="")
+        if not safe_name:
+            continue
+            
+        md_path = os.path.join(people_dir, f"{safe_name}.md")
+        
+        fm = {
+            "type": "persona",
+            "name": assignee,
+            "open_tasks": stats["open_tasks"],
+            "overdue_tasks": stats["overdue_tasks"],
+            "blocked_tasks": stats["blocked_tasks"],
+            "active_projects": sorted(list(stats["active_projects"]))
+        }
+        
+        block = render_hermes_people_block(synced_at, assignee)
+        
+        if os.path.exists(md_path):
+            with open(md_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            old_fm, body = parse_frontmatter(content)
+            # preserve manual fm
+            for k, v in old_fm.items():
+                if k not in fm and not k.startswith("_"):
+                    fm[k] = v
+            # extract human notes after HERMES:END
+            human = ""
+            if "<!-- HERMES:END -->" in body:
+                human = body.split("<!-- HERMES:END -->", 1)[1].strip()
+            
+            new_content = render_frontmatter(fm) + "\n" + block + "\n\n" + human
+            if new_content.strip() != content.strip():
+                atomic_write(md_path, new_content)
+        else:
+            new_content = render_frontmatter(fm) + "\n" + block + "\n\n"
+            atomic_write(md_path, new_content)
 
 
 def write_index(vault, plan, meta):
@@ -1159,6 +1257,7 @@ def main():
         return 0
 
     created, updated = apply_plan(vault, plan, meta)
+    apply_people_plan(vault, plan["people_stats"], meta["synced_at"])
     idx = write_index(vault, plan, meta)
     snap = write_snapshot(vault, plan, meta)
     print()

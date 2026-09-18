@@ -441,5 +441,93 @@ Esto es un comentario humano.
             self.assertIn("Tarea Normal 1", act_section)
             self.assertNotIn("Hito Futuro Cercano", act_section)
 
+
+    @patch("asana_obsidian_sync.datetime")
+    @patch("asana_obsidian_sync.fetch_workspaces")
+    @patch("asana_obsidian_sync.fetch_teams")
+    @patch("asana_obsidian_sync.fetch_projects")
+    @patch("asana_obsidian_sync.fetch_project_tasks")
+    @patch("asana_obsidian_sync.fetch_me")
+    @patch("asana_obsidian_sync.fetch_portfolios")
+    def test_people_layer_and_bus_factor(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
+        from datetime import datetime, timezone
+        from asana_obsidian_sync import plan_sync, apply_plan, apply_people_plan
+
+        dt = datetime(2026, 9, 18, 10, 0, tzinfo=timezone.utc)
+        mock_datetime.now.return_value = dt
+        mock_datetime.strptime = datetime.strptime
+        
+        mock_workspaces.return_value = [{"gid": "ws1", "name": "Workspace 1"}]
+        mock_teams.return_value = []
+        mock_me.return_value = {}
+        mock_portfolios.return_value = []
+
+        mock_projects.return_value = [
+            {"gid": "p_bus", "name": "Project Bus Factor", "due_on": "2026-12-31"},
+            {"gid": "p_shared", "name": "Project Shared", "due_on": "2026-12-31"},
+        ]
+
+        def mock_fetch_tasks(token, gid):
+            if gid == "p_bus":
+                return [
+                    {"gid": "t1", "name": "T1", "completed": False, "assignee": {"name": "Maria"}, "due_on": "2026-09-01"}, # overdue
+                    {"gid": "t2", "name": "T2", "completed": False, "assignee": {"name": "Maria"}, "notes": "Status: bloqueado no db"}, # blocked
+                ]
+            else:
+                return [
+                    {"gid": "t3", "name": "T3", "completed": False, "assignee": {"name": "Maria"}},
+                    {"gid": "t4", "name": "T4", "completed": False, "assignee": {"name": "Juan"}},
+                    {"gid": "t5", "name": "T5", "completed": True, "assignee": {"name": "Juan"}}, # completed ignores
+                ]
+        
+        mock_tasks.side_effect = mock_fetch_tasks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "02 Projects"))
+            
+            # create manual note for Juan
+            os.makedirs(os.path.join(tmp, "03 People"))
+            juan_path = os.path.join(tmp, "03 People", "Juan.md")
+            with open(juan_path, "w") as f:
+                f.write("---\nmanual_field: test\n---\n<!-- HERMES:START -->\nold\n<!-- HERMES:END -->\nMy manual notes")
+            
+            plan, meta = plan_sync("fake_token", tmp)
+            apply_plan(tmp, plan, meta)
+            apply_people_plan(tmp, plan["people_stats"], meta["synced_at"])
+            
+            # 1. Bus Factor Check
+            path_bus = os.path.join(tmp, "02 Projects", "Project Bus Factor.md")
+            with open(path_bus, "r", encoding="utf-8") as f:
+                content_bus = f.read()
+            fm_bus, _ = parse_frontmatter(content_bus)
+            self.assertTrue(fm_bus.get("bus_factor_alert"))
+            
+            path_shared = os.path.join(tmp, "02 Projects", "Project Shared.md")
+            with open(path_shared, "r", encoding="utf-8") as f:
+                content_shared = f.read()
+            fm_shared, _ = parse_frontmatter(content_shared)
+            self.assertFalse(fm_shared.get("bus_factor_alert"))
+            
+            # 2. People Check - Maria
+            maria_path = os.path.join(tmp, "03 People", "Maria.md")
+            with open(maria_path, "r", encoding="utf-8") as f:
+                content_m = f.read()
+            fm_m, body_m = parse_frontmatter(content_m)
+            self.assertEqual(fm_m.get("open_tasks"), 3) # 2 bus + 1 shared
+            self.assertEqual(fm_m.get("overdue_tasks"), 1)
+            self.assertEqual(fm_m.get("blocked_tasks"), 1)
+            self.assertIn("[[Project Bus Factor]]", fm_m.get("active_projects"))
+            self.assertIn("[[Project Shared]]", fm_m.get("active_projects"))
+            self.assertIn("## Carga Consolidada de Maria", body_m)
+            
+            # 3. People Check - Juan (preserve manual)
+            with open(juan_path, "r", encoding="utf-8") as f:
+                content_j = f.read()
+            fm_j, body_j = parse_frontmatter(content_j)
+            self.assertEqual(fm_j.get("open_tasks"), 1) # only t4 is open
+            self.assertEqual(fm_j.get("manual_field"), "test")
+            self.assertIn("My manual notes", body_j)
+            self.assertNotIn("old", body_j)
+
 if __name__ == '__main__':
     unittest.main()
