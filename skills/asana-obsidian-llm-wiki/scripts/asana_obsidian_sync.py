@@ -932,8 +932,8 @@ def write_snapshot(vault, plan, meta):
     lines = [
         f"# Snapshot: {today}",
         "",
-        "| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % |",
-        "|---|---|---|---|---|---|---|---|"
+        "| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker |",
+        "|---|---|---|---|---|---|---|---|---|---|---|"
     ]
     
     all_items = plan["create"] + plan["update"] + plan["skip"]
@@ -952,7 +952,12 @@ def write_snapshot(vault, plan, meta):
         if total > 0:
             pct = round((done / total) * 100)
             
-        lines.append(f"| {gid} | {name} | {status} | {total} | {done} | {blocked} | {due} | {pct} |")
+        replan = fm.get("replan_count") or 0
+        slip = fm.get("slip_days") or 0
+        blocker = fm.get("critical_blocker") or ""
+        blocker = str(blocker).replace("|", "\\|")
+            
+        lines.append(f"| {gid} | {name} | {status} | {total} | {done} | {blocked} | {due} | {pct} | {replan} | {slip} | {blocker} |")
         
     atomic_write(path, "\n".join(lines) + "\n")
     return path

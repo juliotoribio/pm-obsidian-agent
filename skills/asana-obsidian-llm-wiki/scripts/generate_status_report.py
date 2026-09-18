@@ -12,16 +12,17 @@ Uso:
 import os
 import sys
 import argparse
-from asana_obsidian_sync import scan_existing_notes
+from asana_obsidian_sync import slugify
 
 def parse_snapshot(path):
     """Parsea el archivo markdown de snapshot para extraer los proyectos.
-    Devuelve un dict: gid -> { name, status, total, done, blocked, due_date, pct }
+    Devuelve un dict: gid -> { name, status, total, done, blocked, due_date, pct, replans, slip, blocker }
     """
     if not os.path.exists(path):
         return None
         
     out = {}
+    valid_data_found = False
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             if line.startswith("|") and not line.startswith("| asana_gid") and not line.startswith("|---"):
@@ -35,18 +36,29 @@ def parse_snapshot(path):
                     status = parts[3]
                     
                     try: total = int(parts[4])
-                    except: total = 0
+                    except ValueError: total = 0
                     
                     try: done = int(parts[5])
-                    except: done = 0
+                    except ValueError: done = 0
                         
                     try: blocked = int(parts[6])
-                    except: blocked = 0
+                    except ValueError: blocked = 0
                         
                     due_date = parts[7]
                     
                     try: pct = int(parts[8])
-                    except: pct = 0
+                    except ValueError: pct = 0
+                        
+                    replans = 0
+                    slip = 0
+                    blocker = "Ninguno listado"
+                    
+                    if len(parts) >= 12:
+                        try: replans = int(parts[9])
+                        except ValueError: replans = 0
+                        try: slip = int(parts[10])
+                        except ValueError: slip = 0
+                        blocker = parts[11].replace("\\|", "|") or "Ninguno listado"
                         
                     out[gid] = {
                         "name": name,
@@ -55,8 +67,19 @@ def parse_snapshot(path):
                         "done": done,
                         "blocked": blocked,
                         "due_date": due_date,
-                        "pct": pct
+                        "pct": pct,
+                        "replans": replans,
+                        "slip": slip,
+                        "blocker": blocker
                     }
+                    valid_data_found = True
+                    
+    # Si el archivo existía pero estaba vacío o mal formado (no arrojó filas válidas), retornar None
+    if not valid_data_found and os.path.getsize(path) > 0:
+        # Podría ser un archivo vacío válido, pero si tiene contenido y no logramos parsear filas, asumimos corrupto.
+        # En realidad, mejor verificamos si la línea de cabecera estaba.
+        pass # De momento si devuelve {} está bien si era un snapshot vacío (sin proyectos).
+        
     return out
 
 def get_historical_snapshots(log_dir, fecha_hasta):
@@ -69,7 +92,7 @@ def get_historical_snapshots(log_dir, fecha_hasta):
             fecha_str = f[:-3]
             if fecha_str <= fecha_hasta:
                 snap = parse_snapshot(os.path.join(log_dir, f))
-                if snap is not None:
+                if snap is not None and len(snap) > 0:
                     hist[fecha_str] = snap
     return dict(sorted(hist.items()))
 
@@ -78,26 +101,22 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
     hist = get_historical_snapshots(log_dir, d_hasta)
     
     if d_desde not in hist:
-        print(f"Error: Snapshot no encontrado para la fecha desde ({d_desde})")
+        print(f"Error: Snapshot no encontrado (o vacío/corrupto) para la fecha desde ({d_desde})")
         sys.exit(1)
         
     if d_hasta not in hist:
-        print(f"Error: Snapshot no encontrado para la fecha hasta ({d_hasta})")
+        print(f"Error: Snapshot no encontrado (o vacío/corrupto) para la fecha hasta ({d_hasta})")
         sys.exit(1)
         
     snap_desde = hist[d_desde]
     snap_hasta = hist[d_hasta]
     
-    # Sort history chronologically
     sorted_dates = list(hist.keys())
-    
-    existing_notes = scan_existing_notes(vault)
     
     rojos = []
     grises = []
     verdes = []
     
-    # Evaluar proyectos que existen en HASTA
     for gid, hasta in snap_hasta.items():
         desde = snap_desde.get(gid)
         
@@ -111,7 +130,6 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
             estado = "gris"
             razon = "Sin tareas"
         else:
-            # Reglas ROJAS
             if hasta["blocked"] > desde["blocked"]:
                 estado = "rojo"
                 razon = f"Aumentaron tareas bloqueadas ({desde['blocked']} -> {hasta['blocked']})"
@@ -122,14 +140,10 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
                 estado = "rojo"
                 razon = f"Vencido ({hasta['due_date']})"
             else:
-                # Regla VERDE
                 if hasta["pct"] > desde["pct"]:
                     estado = "verde"
                     razon = f"Avanzó: {desde['pct']}% ➡️ {hasta['pct']}%"
                 else:
-                    # PCT == PCT_DESDE
-                    # Calcular estancamiento histórico
-                    # Buscar los últimos umbral_estancamiento snapshots (incluyendo HASTA)
                     if len(sorted_dates) >= umbral_estancamiento:
                         recent_dates = sorted_dates[-umbral_estancamiento:]
                         stalled = True
@@ -151,20 +165,12 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
         item = {
             "gid": gid,
             "name": hasta["name"],
+            "slug": slugify(hasta["name"]),
             "razon": razon,
-            "replan_count": 0,
-            "slip_days": 0,
-            "critical_blocker": "Ninguno listado"
+            "replan_count": hasta["replans"],
+            "slip_days": hasta["slip"],
+            "critical_blocker": hasta["blocker"]
         }
-        
-        note = existing_notes.get(gid)
-        if note:
-            fm = note["fm"]
-            item["critical_blocker"] = fm.get("critical_blocker") or "Ninguno listado"
-            item["replan_count"] = fm.get("replan_count") or 0
-            item["slip_days"] = fm.get("slip_days") or 0
-        else:
-            item["critical_blocker"] = "Desconocido (nota borrada)"
             
         if estado == "rojo":
             rojos.append(item)
@@ -173,24 +179,22 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
         elif estado == "verde":
             verdes.append(item)
             
-    # Proyectos que existían en DESDE y ya no están en HASTA
     for gid, desde in snap_desde.items():
         if gid not in snap_hasta:
             grises.append({
                 "gid": gid,
                 "name": desde["name"],
+                "slug": slugify(desde["name"]),
                 "razon": "Ya no aparece en Asana (archivado/borrado)",
                 "critical_blocker": "-",
                 "replan_count": 0,
                 "slip_days": 0
             })
             
-    # Sort
     rojos.sort(key=lambda x: x["name"])
     grises.sort(key=lambda x: x["name"])
     verdes.sort(key=lambda x: x["name"])
 
-    # Build markdown
     lines = []
     lines.append(f"# Status Report: {d_desde} a {d_hasta}")
     lines.append("")
@@ -200,7 +204,7 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
         lines.append("*Sin proyectos en riesgo detectados.*")
     else:
         for r in rojos:
-            lines.append(f"- **[[{r['name']}]]**: {r['razon']}")
+            lines.append(f"- **[[{r['slug']}]]**: {r['razon']}")
             lines.append(f"  - **Bloqueador Crítico**: {r['critical_blocker']}")
             if r['replan_count'] or r['slip_days']:
                 lines.append(f"  - **Replans**: {r['replan_count']} | **Slip Days**: {r['slip_days']}")
@@ -211,7 +215,7 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
         lines.append("*Sin proyectos en gris.*")
     else:
         for g in grises:
-            lines.append(f"- **[[{g['name']}]]**: {g['razon']}")
+            lines.append(f"- **[[{g['slug']}]]**: {g['razon']}")
             
     lines.append("")
     lines.append("## 🟢 Avance")
@@ -219,11 +223,17 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
         lines.append("*Sin progreso medible en este periodo.*")
     else:
         for v in verdes:
-            lines.append(f"- **[[{v['name']}]]**: {v['razon']}")
+            lines.append(f"- **[[{v['slug']}]]**: {v['razon']}")
 
     lines.append("")
     lines.append("## Comité")
-    lines.append("- *(Decisiones requeridas)*")
+    necesitan_comite = [r for r in rojos if r['critical_blocker'] and r['critical_blocker'] not in ["Ninguno listado", "-"]]
+    if necesitan_comite:
+        lines.append("- Proyectos con bloqueadores críticos que requieren destrabe:")
+        for r in necesitan_comite:
+            lines.append(f"  - **[[{r['slug']}]]**: {r['critical_blocker']}")
+    else:
+        lines.append("- *(No se han detectado bloqueos críticos para escalar al comité)*")
     
     report_path = os.path.join(log_dir, f"Reporte {d_hasta}.md")
     with open(report_path, "w", encoding="utf-8") as f:
