@@ -186,13 +186,20 @@ Sin histórico no hay análisis de desviación, y sin análisis de desviación n
 
 **Qué**
 
-- Script que, tras cada corte, emita un resumen accionable: proyectos sin movimiento en N días, owners sobrecargados, hitos en riesgo, discrepancias RAG.
-- Salida a Telegram (el gateway ya existe en el stack).
+- Script que emita un resumen accionable reportando deltas, no estado absoluto: qué entró en rojo desde el último envío, qué se recuperó, qué empeoró.
+- Salida a consola (stdout) en markdown. El transporte (Slack/Telegram) queda delegado a un adaptador externo para que la lógica de emisión sea intercambiable y agnóstica.
+- Archivo de estado `99 System/digest-state.json` con mapa: `asana_gid` → `último estado notificado` y `fecha`. El digest compara contra este estado.
+
+**Reglas de emisión**
+
+- Un proyecto sin cambios no se repite hasta que cambie o pasen N días (default 7).
+- Una recuperación se anuncia una única vez.
+- Tope de ítems por digest (default 10); si se excede, resumir el resto en una línea de conteo.
 
 **Restricciones**
 
-- **Registrar un hallazgo ≠ autorización para ejecutarlo.** El digest informa y propone; nunca actúa.
-- Sin acciones de escritura hacia Asana desde este camino.
+- Registrar un hallazgo no autoriza actuar sobre él; el digest informa y propone, nunca escribe en Asana.
+- El archivo de estado se actualiza solo cuando el digest se emite realmente, nunca en dry-run.
 
 **Aceptación**
 
