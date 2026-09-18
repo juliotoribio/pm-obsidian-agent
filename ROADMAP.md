@@ -182,7 +182,7 @@ Sin histórico no hay análisis de desviación, y sin análisis de desviación n
 
 - Test con dos workspaces mockeados que verifique que no hay colisión de notas ni de programas.
 
-### 9. Digest proactivo
+### 9. Digest proactivo (COMPLETADO)
 
 **Qué**
 

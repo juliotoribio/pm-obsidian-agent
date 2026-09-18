@@ -81,6 +81,45 @@ python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/asana
 
 Debe listar el workspace detectado y los proyectos que se sincronizarían. Con `--dry-run` no escribe nada en el vault.
 
+### 6. Ejecución del Agente
+```bash
+python3 skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --apply
+```
+
+### 7. Primera Ejecución y Validación (Dry-Run)
+
+Antes de conectar el agente a tu entorno real, sigue esta secuencia de "primer contacto" para validar que el comportamiento es el esperado sin riesgo de corromper datos:
+
+1. **Dry-Run del Sync**:
+   ```bash
+   python3 skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --dry-run
+   ```
+   **🚨 Qué revisar antes de autorizar el `--apply`:**
+   - **Resolución de programas homónimos**: Revisa que los programas con igual nombre en distintos workspaces (ej. "Transformación Digital") se prefijen correctamente con el nombre del Workspace.
+   - **Sanitización de nombres (Slugs)**: Identifica si hay proyectos con caracteres problemáticos (`[]`, `:`, `/`, `\`). El script debería limpiarlos; si ves que intentará crear notas con corchetes (ej. `[1]`), detén el proceso, ya que romperá los wikilinks en Obsidian.
+   - **Alcance correcto (Scope)**: Verifica que la cantidad de proyectos detectados coincida con tu expectativa. Si procesa muchos más de los esperados, podría estar incluyendo proyectos archivados o workspaces no deseados.
+   - **Campos faltantes**: Observa si hay advertencias repetitivas sobre campos personalizados faltantes (ej. RAG, Blockers). Si ocurre masivamente, Asana podría haber cambiado los GIDs internos de esos campos.
+
+2. **Aplicar en Vault de Prueba**:
+   Si el plan del paso 1 es correcto, aplícalo contra un vault de prueba, no el real. Esto generará la estructura y el primer snapshot en `03 Log/`.
+   ```bash
+   mkdir -p /tmp/obsidian-test-vault
+   OBSIDIAN_VAULT_PATH=/tmp/obsidian-test-vault python3 skills/asana-obsidian-llm-wiki/scripts/bootstrap_vault.py
+   OBSIDIAN_VAULT_PATH=/tmp/obsidian-test-vault python3 skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --apply
+   ```
+
+3. **Prueba del Digest (Dry-Run)**:
+   Apunta el digest al vault de prueba.
+   ```bash
+   python3 skills/asana-obsidian-llm-wiki/scripts/generate_proactive_digest.py /tmp/obsidian-test-vault --dry-run
+   ```
+   **🔍 Qué esperar ver (con un solo snapshot):**
+   - Como es la primera vez que corre, no existe historial previo (`digest-state.json` está vacío), por lo que los deltas necesitan al menos dos cortes para reportar empeoramientos o recuperaciones.
+   - El digest evaluará el estado absoluto de crisis actual. Cualquier proyecto vencido (fecha pasada y pct < 100) o con tareas bloqueadas será evaluado como Rojo.
+   - Al no tener registro anterior, TODAS estas alertas saldrán catalogadas exclusivamente como `🔴 NUEVO`.
+   - Los proyectos sanos pasarán a verde silenciosamente.
+   - No verás alertas de `EMPEORÓ`, `RECUPERADO` ni `RECORDATORIO`.
+
 ## Snapshot y Baseline
 En cada ejecución con `--apply`, se genera un snapshot del estado en `03 Log/YYYY-MM-DD.md`. Además, la nota de cada proyecto recibe tres métricas inmutables/históricas en su frontmatter (`baseline_due_date`, `replan_count`, `slip_days`). Todo esto sienta las bases de un historial de PMO (Ver `ROADMAP.md`).
 
