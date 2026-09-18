@@ -2,15 +2,16 @@
 """
 generate_status_report.py
 
-Compara dos snapshots en `03 Log/` y genera un reporte ejecutivo de estado.
+Genera un reporte de status estructurado en estados semánticos (Rojo, Gris, Verde).
+Compara el historial de proyectos en `03 Log/` hasta <FECHA_HASTA>.
+
 Uso:
-  python generate_status_report.py <VAULT_PATH> <FECHA_DESDE> <FECHA_HASTA>
+  python generate_status_report.py <VAULT_PATH> <FECHA_DESDE> <FECHA_HASTA> [--umbral-estancamiento N]
 """
 
 import os
 import sys
 import argparse
-import re
 from asana_obsidian_sync import scan_existing_notes
 
 def parse_snapshot(path):
@@ -33,27 +34,19 @@ def parse_snapshot(path):
                     name = parts[2].replace("\\|", "|")
                     status = parts[3]
                     
-                    try:
-                        total = int(parts[4])
-                    except:
-                        total = 0
+                    try: total = int(parts[4])
+                    except: total = 0
                     
-                    try:
-                        done = int(parts[5])
-                    except:
-                        done = 0
+                    try: done = int(parts[5])
+                    except: done = 0
                         
-                    try:
-                        blocked = int(parts[6])
-                    except:
-                        blocked = 0
+                    try: blocked = int(parts[6])
+                    except: blocked = 0
                         
                     due_date = parts[7]
                     
-                    try:
-                        pct = int(parts[8])
-                    except:
-                        pct = 0
+                    try: pct = int(parts[8])
+                    except: pct = 0
                         
                     out[gid] = {
                         "name": name,
@@ -66,94 +59,168 @@ def parse_snapshot(path):
                     }
     return out
 
-def generate_report(vault, d_desde, d_hasta):
+def get_historical_snapshots(log_dir, fecha_hasta):
+    """Devuelve un dict fecha -> snapshot parseado, ordenado cronológicamente hasta fecha_hasta."""
+    hist = {}
+    if not os.path.isdir(log_dir):
+        return hist
+    for f in os.listdir(log_dir):
+        if f.endswith(".md") and f != f"Reporte {fecha_hasta}.md" and not f.startswith("Reporte "):
+            fecha_str = f[:-3]
+            if fecha_str <= fecha_hasta:
+                snap = parse_snapshot(os.path.join(log_dir, f))
+                if snap is not None:
+                    hist[fecha_str] = snap
+    return dict(sorted(hist.items()))
+
+def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
     log_dir = os.path.join(vault, "03 Log")
-    path_desde = os.path.join(log_dir, f"{d_desde}.md")
-    path_hasta = os.path.join(log_dir, f"{d_hasta}.md")
+    hist = get_historical_snapshots(log_dir, d_hasta)
     
-    snap_desde = parse_snapshot(path_desde)
-    if snap_desde is None:
-        print(f"Error: Snapshot no encontrado para la fecha desde ({path_desde})")
+    if d_desde not in hist:
+        print(f"Error: Snapshot no encontrado para la fecha desde ({d_desde})")
         sys.exit(1)
         
-    snap_hasta = parse_snapshot(path_hasta)
-    if snap_hasta is None:
-        print(f"Error: Snapshot no encontrado para la fecha hasta ({path_hasta})")
+    if d_hasta not in hist:
+        print(f"Error: Snapshot no encontrado para la fecha hasta ({d_hasta})")
         sys.exit(1)
         
+    snap_desde = hist[d_desde]
+    snap_hasta = hist[d_hasta]
+    
+    # Sort history chronologically
+    sorted_dates = list(hist.keys())
+    
     existing_notes = scan_existing_notes(vault)
     
-    fechas_movidas = []
-    alertas_rojas = []
+    rojos = []
+    grises = []
+    verdes = []
     
+    # Evaluar proyectos que existen en HASTA
     for gid, hasta in snap_hasta.items():
         desde = snap_desde.get(gid)
+        
+        estado = None
+        razon = ""
+        
         if not desde:
-            continue
-            
-        is_rojo = False
-        # Riesgo: no avanzó el %, aumentaron los blockers, o tiene % bajo cerca a vencer (simplificado)
-        if hasta["blocked"] > desde["blocked"]:
-            is_rojo = True
-            razon = f"Aumentaron tareas bloqueadas ({desde['blocked']} -> {hasta['blocked']})"
-        elif hasta["pct"] == desde["pct"] and hasta["pct"] < 100 and hasta["total"] > 0:
-            is_rojo = True
-            razon = f"Estancado en {hasta['pct']}%"
-            
-        if is_rojo:
-            alertas_rojas.append({
-                "gid": gid,
-                "name": hasta["name"],
-                "razon": razon
-            })
-            
-        # Fecha movida
-        if hasta["due_date"] != desde["due_date"]:
-            fechas_movidas.append({
-                "gid": gid,
-                "name": hasta["name"],
-                "old_due": desde["due_date"],
-                "new_due": hasta["due_date"]
-            })
-            
-    # Enriquecer leyendo las notas
-    for lst in [alertas_rojas, fechas_movidas]:
-        for item in lst:
-            note = existing_notes.get(item["gid"])
-            if note:
-                fm = note["fm"]
-                item["critical_blocker"] = fm.get("critical_blocker") or "Ninguno listado"
-                item["replan_count"] = fm.get("replan_count") or 0
-                item["slip_days"] = fm.get("slip_days") or 0
+            estado = "gris"
+            razon = "Nuevo desde el último corte"
+        elif hasta["total"] == 0:
+            estado = "gris"
+            razon = "Sin tareas"
+        else:
+            # Reglas ROJAS
+            if hasta["blocked"] > desde["blocked"]:
+                estado = "rojo"
+                razon = f"Aumentaron tareas bloqueadas ({desde['blocked']} -> {hasta['blocked']})"
+            elif hasta["due_date"] != desde["due_date"]:
+                estado = "rojo"
+                razon = f"Fecha movida: {desde['due_date'] or 'Ninguna'} ➡️ {hasta['due_date'] or 'Ninguna'}"
+            elif hasta["due_date"] and hasta["due_date"] < d_hasta and hasta["pct"] < 100:
+                estado = "rojo"
+                razon = f"Vencido ({hasta['due_date']})"
             else:
-                item["critical_blocker"] = "Desconocido (nota borrada)"
-                item["replan_count"] = 0
-                item["slip_days"] = 0
-                
+                # Regla VERDE
+                if hasta["pct"] > desde["pct"]:
+                    estado = "verde"
+                    razon = f"Avanzó: {desde['pct']}% ➡️ {hasta['pct']}%"
+                else:
+                    # PCT == PCT_DESDE
+                    # Calcular estancamiento histórico
+                    # Buscar los últimos umbral_estancamiento snapshots (incluyendo HASTA)
+                    if len(sorted_dates) >= umbral_estancamiento:
+                        recent_dates = sorted_dates[-umbral_estancamiento:]
+                        stalled = True
+                        for d in recent_dates:
+                            s = hist[d].get(gid)
+                            if not s or s["pct"] != hasta["pct"]:
+                                stalled = False
+                                break
+                        if stalled:
+                            estado = "rojo"
+                            razon = f"Estancado en {hasta['pct']}% por {umbral_estancamiento} cortes consecutivos"
+                        else:
+                            estado = "gris"
+                            razon = "Sin movimiento reciente (menos del umbral crítico)"
+                    else:
+                        estado = "gris"
+                        razon = "Sin movimiento reciente (menos del umbral crítico)"
+                        
+        item = {
+            "gid": gid,
+            "name": hasta["name"],
+            "razon": razon,
+            "replan_count": 0,
+            "slip_days": 0,
+            "critical_blocker": "Ninguno listado"
+        }
+        
+        note = existing_notes.get(gid)
+        if note:
+            fm = note["fm"]
+            item["critical_blocker"] = fm.get("critical_blocker") or "Ninguno listado"
+            item["replan_count"] = fm.get("replan_count") or 0
+            item["slip_days"] = fm.get("slip_days") or 0
+        else:
+            item["critical_blocker"] = "Desconocido (nota borrada)"
+            
+        if estado == "rojo":
+            rojos.append(item)
+        elif estado == "gris":
+            grises.append(item)
+        elif estado == "verde":
+            verdes.append(item)
+            
+    # Proyectos que existían en DESDE y ya no están en HASTA
+    for gid, desde in snap_desde.items():
+        if gid not in snap_hasta:
+            grises.append({
+                "gid": gid,
+                "name": desde["name"],
+                "razon": "Ya no aparece en Asana (archivado/borrado)",
+                "critical_blocker": "-",
+                "replan_count": 0,
+                "slip_days": 0
+            })
+            
+    # Sort
+    rojos.sort(key=lambda x: x["name"])
+    grises.sort(key=lambda x: x["name"])
+    verdes.sort(key=lambda x: x["name"])
+
     # Build markdown
     lines = []
     lines.append(f"# Status Report: {d_desde} a {d_hasta}")
     lines.append("")
     
-    lines.append("## 🚨 Alertas Rojas")
-    if not alertas_rojas:
+    lines.append("## 🔴 Alertas Rojas")
+    if not rojos:
         lines.append("*Sin proyectos en riesgo detectados.*")
     else:
-        for r in alertas_rojas:
+        for r in rojos:
             lines.append(f"- **[[{r['name']}]]**: {r['razon']}")
             lines.append(f"  - **Bloqueador Crítico**: {r['critical_blocker']}")
+            if r['replan_count'] or r['slip_days']:
+                lines.append(f"  - **Replans**: {r['replan_count']} | **Slip Days**: {r['slip_days']}")
             
     lines.append("")
-    lines.append("## 🗓️ Fechas Movidas")
-    if not fechas_movidas:
-        lines.append("*Sin cambios de fecha detectados.*")
+    lines.append("## ⚪️ Proyectos en Gris")
+    if not grises:
+        lines.append("*Sin proyectos en gris.*")
     else:
-        for f in fechas_movidas:
-            old = f['old_due'] or 'Ninguna'
-            new = f['new_due'] or 'Ninguna'
-            lines.append(f"- **[[{f['name']}]]**: {old} ➡️ {new}")
-            lines.append(f"  - **Replans**: {f['replan_count']} | **Slip Days**: {f['slip_days']}")
+        for g in grises:
+            lines.append(f"- **[[{g['name']}]]**: {g['razon']}")
             
+    lines.append("")
+    lines.append("## 🟢 Avance")
+    if not verdes:
+        lines.append("*Sin progreso medible en este periodo.*")
+    else:
+        for v in verdes:
+            lines.append(f"- **[[{v['name']}]]**: {v['razon']}")
+
     lines.append("")
     lines.append("## Comité")
     lines.append("- *(Decisiones requeridas)*")
@@ -170,7 +237,8 @@ if __name__ == "__main__":
     parser.add_argument("vault", help="Ruta al vault de Obsidian")
     parser.add_argument("desde", help="Fecha inicial YYYY-MM-DD")
     parser.add_argument("hasta", help="Fecha final YYYY-MM-DD")
+    parser.add_argument("--umbral-estancamiento", type=int, default=3, help="Cortes sin movimiento para clasificar como riesgo")
     args = parser.parse_args()
     
-    generate_report(args.vault, args.desde, args.hasta)
+    generate_report(args.vault, args.desde, args.hasta, args.umbral_estancamiento)
 
