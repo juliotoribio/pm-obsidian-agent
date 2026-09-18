@@ -566,13 +566,17 @@ def scan_existing_notes(vault):
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 text = fh.read()
-                fm, body = parse_frontmatter(text)
         except Exception as e:
-            print(f"WARNING: YAML corrupto ignorado en {fn}: {e}")
-            import re
-            m = re.search(r"^asana_gid:\s*['\"]?(\d+)['\"]?", text, re.MULTILINE)
-            if m:
-                out[str(m.group(1))] = {"path": path, "corrupted": True}
+            print(f"WARNING: no se pudo leer {fn}: {e}")
+            continue
+
+        try:
+            fm, body = parse_frontmatter(text)
+        except Exception as e:
+            print(f"WARNING: YAML corrupto en {fn}: {e}")
+            mm = re.search(r"^asana_gid:\s*['\"]?(\d+)['\"]?", text, re.MULTILINE)
+            if mm:
+                out[str(mm.group(1))] = {"path": path, "corrupted": True}
             continue
         gid = fm.get("asana_gid")
         if gid:
@@ -616,7 +620,7 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
 
     existing = scan_existing_notes(vault)
 
-    plan = {"create": [], "update": [], "skip": []}
+    plan = {"create": [], "update": [], "skip": [], "corrupt": []}
     programs_seen = set()
     for p in projects:
         gid = p["gid"]
@@ -626,7 +630,7 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
 
         cur = existing.get(gid)
         if cur and cur.get("corrupted"):
-            plan["skip"].append({"project": p, "reason": f"Corrupt YAML in {cur['path']}"})
+            plan["corrupt"].append({"project": p, "existing": cur})
             continue
 
         cur_fm = cur["fm"] if cur else {}
@@ -950,6 +954,10 @@ def main():
     print("SIN CAMBIOS : %d" % len(plan["skip"]))
     for it in plan["skip"]:
         print("   = %s" % os.path.basename(it["existing"]["path"]))
+    if plan.get("corrupt"):
+        print("CORRUPTAS   : %d" % len(plan["corrupt"]))
+        for it in plan["corrupt"]:
+            print("   ! %s" % os.path.basename(it["existing"]["path"]))
 
     if not args.apply:
         print()
