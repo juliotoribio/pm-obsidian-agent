@@ -23,7 +23,7 @@ Sin histórico no hay análisis de desviación, y sin análisis de desviación n
 
 **Qué**
 
-- En cada `--apply`, escribir `04 Log/YYYY-MM-DD.md` con una fila por proyecto: `asana_gid`, nombre, `status`, `tasks_total`, `tasks_done`, `tasks_blocked`, `due_date`, `pct`. Un archivo por día; si ya existe, sobrescribir.
+- En cada `--apply`, escribir `03 Log/YYYY-MM-DD.md` con una fila por proyecto: `asana_gid`, nombre, `status`, `tasks_total`, `tasks_done`, `tasks_blocked`, `due_date`, `pct`. Un archivo por día; si ya existe, sobrescribir.
 - Agregar al frontmatter de proyecto:
   - `baseline_due_date` — se fija al crear la nota y **nunca** se vuelve a escribir.
   - `replan_count` — incrementa cuando `due_date` difiere del valor del sync anterior.
@@ -31,20 +31,20 @@ Sin histórico no hay análisis de desviación, y sin análisis de desviación n
 
 **Restricciones**
 
-- El log vive en `04 Log/`, fuera de `02 Projects`.
+- El log vive en `03 Log/`, fuera de `02 Projects`.
 - Los tres campos nuevos respetan la preservación de frontmatter existente.
 - `baseline_due_date` es inmutable: si ya tiene valor, el sync lo deja.
 
 **Aceptación**
 
-- Test que simule dos syncs con `due_date` distinta y verifique: `baseline_due_date` sin cambio, `replan_count == 1`, `slip_days` correcto, y dos archivos en `04 Log/`.
+- Test que simule dos syncs con `due_date` distinta y verifique: `baseline_due_date` sin cambio, `replan_count == 1`, `slip_days` correcto, y dos archivos en `03 Log/`.
 - Suite completa en verde + `--dry-run` mostrado.
 
 ### 2. Status report por corte
 
 **Qué**
 
-- Script `generate_status_report.py <FECHA_DESDE> <FECHA_HASTA>` que compara dos snapshots de `04 Log/` y produce `04 Log/Reporte YYYY-MM-DD.md` con:
+- Script `generate_status_report.py <FECHA_DESDE> <FECHA_HASTA>` que compara dos snapshots de `03 Log/` y produce `03 Log/Reporte YYYY-MM-DD.md` con:
   - Qué cambió desde el corte anterior (proyectos que entraron/salieron de riesgo).
   - Proyectos en rojo, con su bloqueador crítico.
   - Fechas que se movieron, con `replan_count` y `slip_days`.

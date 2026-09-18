@@ -16,7 +16,7 @@ import sys
 FOLDERS = [
     "01 Programas",
     "02 Projects",
-    "04 Log",
+    "03 Log",
     "04 Decisions",
     "05 Knowledge",
     "07 Agents",

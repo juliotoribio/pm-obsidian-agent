@@ -655,7 +655,8 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
             except ValueError:
                 pass
         
-        if old_due and new_due and old_due != new_due:
+        # Consider any change (even to/from empty) as a replan, as long as the project already existed
+        if old_due is not None and old_due != new_due:
             replan_count += 1
 
         slip_days = ""
@@ -920,9 +921,9 @@ def record_deletion(vault, project_gid, task_name, task_gid, apply=False):
     return 0
 
 def write_snapshot(vault, plan, meta):
-    """Escribe un snapshot histórico en 04 Log/YYYY-MM-DD.md"""
+    """Escribe un snapshot histórico en 03 Log/YYYY-MM-DD.md"""
     today = datetime.now().astimezone().date().isoformat()
-    log_dir = os.path.join(vault, "04 Log")
+    log_dir = os.path.join(vault, "03 Log")
     if not os.path.isdir(log_dir):
         os.makedirs(log_dir)
         

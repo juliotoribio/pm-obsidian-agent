@@ -153,7 +153,7 @@ Esto es un comentario humano.
 
         with tempfile.TemporaryDirectory() as tmp:
             os.makedirs(os.path.join(tmp, "02 Projects"))
-            os.makedirs(os.path.join(tmp, "04 Log"))
+            os.makedirs(os.path.join(tmp, "03 Log"))
 
             # --- PRIMER SYNC ---
             mock_projects.return_value = [{"gid": "123", "name": "P1", "due_on": "2026-09-20"}]
@@ -175,7 +175,7 @@ Esto es un comentario humano.
             self.assertEqual(fm1.get("slip_days"), 0)
 
             # Verificar Snapshot 1
-            snap1_path = os.path.join(tmp, "04 Log", "2026-09-17.md")
+            snap1_path = os.path.join(tmp, "03 Log", "2026-09-17.md")
             self.assertTrue(os.path.exists(snap1_path))
 
             # --- SEGUNDO SYNC ---
@@ -197,7 +197,7 @@ Esto es un comentario humano.
             self.assertEqual(fm2.get("slip_days"), 5)
 
             # Verificar Snapshot 2
-            snap2_path = os.path.join(tmp, "04 Log", "2026-09-18.md")
+            snap2_path = os.path.join(tmp, "03 Log", "2026-09-18.md")
             self.assertTrue(os.path.exists(snap2_path))
 
 if __name__ == '__main__':

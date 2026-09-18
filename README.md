@@ -81,6 +81,9 @@ python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/asana
 
 Debe listar el workspace detectado y los proyectos que se sincronizarían. Con `--dry-run` no escribe nada en el vault.
 
+## Snapshot y Baseline
+En cada ejecución con `--apply`, se genera un snapshot del estado en `03 Log/YYYY-MM-DD.md`. Además, la nota de cada proyecto recibe tres métricas inmutables/históricas en su frontmatter (`baseline_due_date`, `replan_count`, `slip_days`). Todo esto sienta las bases de un historial de PMO (Ver `ROADMAP.md`).
+
 ## Uso
 
 El script principal sincroniza Asana → Obsidian:
