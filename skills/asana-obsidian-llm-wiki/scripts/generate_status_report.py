@@ -63,6 +63,16 @@ def parse_snapshot(path):
                     if len(parts) >= 14:
                         filename = parts[12].strip()
                         
+                    milestones = 0
+                    milestones_done = 0
+                    next_milestone_date = ""
+                    if len(parts) >= 17:
+                        try: milestones = int(parts[13])
+                        except ValueError: milestones = 0
+                        try: milestones_done = int(parts[14])
+                        except ValueError: milestones_done = 0
+                        next_milestone_date = parts[15].strip()
+                        
                     out[gid] = {
                         "name": name,
                         "status": status,
@@ -74,7 +84,10 @@ def parse_snapshot(path):
                         "replans": replans,
                         "slip": slip,
                         "blocker": blocker,
-                        "filename": filename
+                        "filename": filename,
+                        "milestones": milestones,
+                        "milestones_done": milestones_done,
+                        "next_milestone_date": next_milestone_date
                     }
                     
     return out
@@ -138,9 +151,18 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
             elif hasta["due_date"] != desde["due_date"]:
                 estado = "rojo"
                 razon = f"Fecha movida: {desde['due_date'] or 'Ninguna'} ➡️ {hasta['due_date'] or 'Ninguna'}"
+            elif hasta["next_milestone_date"] != desde["next_milestone_date"] and desde["next_milestone_date"] and hasta["next_milestone_date"] > desde["next_milestone_date"]:
+                estado = "rojo"
+                razon = f"Hito demorado: {desde['next_milestone_date']} ➡️ {hasta['next_milestone_date']}"
+            elif hasta["milestones_done"] < desde["milestones_done"]:
+                estado = "rojo"
+                razon = f"Hito reabierto ({desde['milestones_done']} -> {hasta['milestones_done']})"
             elif hasta["due_date"] and hasta["due_date"] < d_hasta and hasta["pct"] < 100:
                 estado = "rojo"
-                razon = f"Vencido ({hasta['due_date']})"
+                razon = f"Proyecto vencido ({hasta['due_date']})"
+            elif hasta["next_milestone_date"] and hasta["next_milestone_date"] < d_hasta:
+                estado = "rojo"
+                razon = f"Próximo hito vencido ({hasta['next_milestone_date']})"
             else:
                 if hasta["pct"] > desde["pct"]:
                     estado = "verde"

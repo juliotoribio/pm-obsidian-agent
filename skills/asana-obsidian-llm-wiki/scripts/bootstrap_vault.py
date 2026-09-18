@@ -141,13 +141,13 @@ views:
       - programa
 
   - type: table
-    name: "⚠️ Hitos en Riesgo (Calculado Rojo / Ámbar)"
+    name: "⚠️ Hitos en Riesgo (Vencidos o a menos de 7 días)"
     filters:
       and:
         - 'next_milestone != null'
         - 'next_milestone != ""'
-        - 'rag_calculado != "Verde"'
-        - 'rag_calculado != "Sin calcular"'
+        - 'next_milestone_date != null'
+        - 'next_milestone_date <= date(today) + dur("7 days")'
     order:
       - next_milestone_date
       - file.name
