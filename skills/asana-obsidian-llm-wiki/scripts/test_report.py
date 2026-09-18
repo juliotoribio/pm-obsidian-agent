@@ -13,35 +13,35 @@ class TestReportStates(unittest.TestCase):
             os.makedirs(os.path.join(tmp, "03 Log"))
 
             snap1 = """# Snapshot: 2026-09-17
-| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 123 | P1 | active | 10 | 2 | 0 | 2026-10-01 | 20 | 0 | 0 | Ninguno listado |
-| 222 | P2 | active | 10 | 5 | 0 | 2026-10-01 | 50 | 0 | 0 | Ninguno listado |
-| 333 | P3 | active | 10 | 5 | 0 | 2026-10-01 | 50 | 0 | 0 | Ninguno listado |
+| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker | Filename |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 123 | P1 | active | 10 | 2 | 0 | 2026-10-01 | 20 | 0 | 0 | Ninguno listado | P1 |
+| 222 | P2 | active | 10 | 5 | 0 | 2026-10-01 | 50 | 0 | 0 | Ninguno listado | P2 |
+| 333 | P3 | active | 10 | 5 | 0 | 2026-10-01 | 50 | 0 | 0 | Ninguno listado | P3 |
 """
             with open(os.path.join(tmp, "03 Log", "2026-09-17.md"), "w") as f: f.write(snap1)
             
             snap2 = """# Snapshot: 2026-09-18
-| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 123 | P1 | active | 10 | 3 | 0 | 2026-10-01 | 30 | 0 | 0 | Ninguno listado |
-| 222 | P2_Stalled | active | 10 | 5 | 0 | 2026-10-01 | 50 | 0 | 0 | Ninguno listado |
-| 444 | P4 | active | 10 | 0 | 0 | 2026-10-01 | 0 | 0 | 0 | Ninguno listado |
-| 555 | P5 | active | 0 | 0 | 0 | 2026-10-01 | 0 | 0 | 0 | Ninguno listado |
-| 666 | P6 | active | 10 | 5 | 0 | 2020-01-01 | 50 | 0 | 0 | Ninguno listado |
-| 777 | P7_Blocked | active | 10 | 5 | 0 | 2026-10-01 | 50 | 1 | 5 | Servidor caído |
+| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker | Filename |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 123 | P1 | active | 10 | 3 | 0 | 2026-10-01 | 30 | 0 | 0 | Ninguno listado | P1 |
+| 222 | P2_Stalled | active | 10 | 5 | 0 | 2026-10-01 | 50 | 0 | 0 | Ninguno listado | P2 Stalled |
+| 444 | P4 | active | 10 | 0 | 0 | 2026-10-01 | 0 | 0 | 0 | Ninguno listado | P4 |
+| 555 | P5 | active | 0 | 0 | 0 | 2026-10-01 | 0 | 0 | 0 | Ninguno listado | P5 |
+| 666 | P6 | active | 10 | 5 | 0 | 2020-01-01 | 50 | 0 | 0 | Ninguno listado | P6 |
+| 777 | P7_Blocked | active | 10 | 5 | 0 | 2026-10-01 | 50 | 1 | 5 | Servidor caído | P7 Blocked |
 """
             with open(os.path.join(tmp, "03 Log", "2026-09-18.md"), "w") as f: f.write(snap2)
             
             snap3 = """# Snapshot: 2026-09-19
-| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 123 | P1 | active | 10 | 4 | 0 | 2026-10-01 | 40 | 0 | 0 | Ninguno listado |
-| 222 | P2_Stalled | active | 10 | 5 | 0 | 2026-10-01 | 50 | 0 | 0 | Ninguno listado |
-| 444 | P4 | active | 10 | 0 | 0 | 2026-10-01 | 0 | 0 | 0 | Ninguno listado |
-| 555 | P5 | active | 0 | 0 | 0 | 2026-10-01 | 0 | 0 | 0 | Ninguno listado |
-| 666 | P6 | active | 10 | 5 | 0 | 2020-01-01 | 50 | 0 | 0 | Ninguno listado |
-| 777 | P7_Blocked | active | 10 | 5 | 1 | 2026-10-01 | 50 | 1 | 5 | Servidor caído |
+| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker | Filename |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 123 | P1 | active | 10 | 4 | 0 | 2026-10-01 | 40 | 0 | 0 | Ninguno listado | P1 |
+| 222 | P2_Stalled | active | 10 | 5 | 0 | 2026-10-01 | 50 | 0 | 0 | Ninguno listado | P2 Stalled |
+| 444 | P4 | active | 10 | 0 | 0 | 2026-10-01 | 0 | 0 | 0 | Ninguno listado | P4 |
+| 555 | P5 | active | 0 | 0 | 0 | 2026-10-01 | 0 | 0 | 0 | Ninguno listado | P5 |
+| 666 | P6 | active | 10 | 5 | 0 | 2020-01-01 | 50 | 0 | 0 | Ninguno listado | P6 |
+| 777 | P7_Blocked | active | 10 | 5 | 1 | 2026-10-01 | 50 | 1 | 5 | Servidor caído | P7 Blocked |
 """
             with open(os.path.join(tmp, "03 Log", "2026-09-19.md"), "w") as f: f.write(snap3)
             

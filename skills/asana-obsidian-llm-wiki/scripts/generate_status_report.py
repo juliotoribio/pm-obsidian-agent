@@ -59,6 +59,10 @@ def parse_snapshot(path):
                         except ValueError: slip = 0
                         blocker = parts[11].replace("\\|", "|") or "Ninguno listado"
                         
+                    filename = None
+                    if len(parts) >= 14:
+                        filename = parts[12].strip()
+                        
                     out[gid] = {
                         "name": name,
                         "status": status,
@@ -69,7 +73,8 @@ def parse_snapshot(path):
                         "pct": pct,
                         "replans": replans,
                         "slip": slip,
-                        "blocker": blocker
+                        "blocker": blocker,
+                        "filename": filename
                     }
                     
     return out
@@ -159,10 +164,13 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
                         estado = "gris"
                         razon = "Sin movimiento reciente (menos del umbral crítico)"
                         
+        filename = hasta.get("filename")
+        slug = filename if filename else slugify(hasta["name"], fallback_gid=gid)
+        
         item = {
             "gid": gid,
             "name": hasta["name"],
-            "slug": slugify(hasta["name"]),
+            "slug": slug,
             "razon": razon,
             "replan_count": hasta["replans"],
             "slip_days": hasta["slip"],
@@ -178,10 +186,12 @@ def generate_report(vault, d_desde, d_hasta, umbral_estancamiento):
             
     for gid, desde in snap_desde.items():
         if gid not in snap_hasta:
+            filename = desde.get("filename")
+            slug = filename if filename else slugify(desde["name"], fallback_gid=gid)
             grises.append({
                 "gid": gid,
                 "name": desde["name"],
-                "slug": slugify(desde["name"]),
+                "slug": slug,
                 "razon": "Ya no aparece en Asana (archivado/borrado)",
                 "critical_blocker": "-",
                 "replan_count": 0,

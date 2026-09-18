@@ -394,13 +394,22 @@ def render_frontmatter(fm):
 
 # ── note rendering ───────────────────────────────────────────────────────
 
-def slugify(name):
+def slugify(name, fallback_gid=None):
     """Human-friendly note title. Underscores become spaces so Asana names
     like 'Programa_Zero_Trust' render as 'Programa Zero Trust'."""
     s = str(name).replace("_", " ")
     s = re.sub(r"[^\w\s-]", "", s, flags=re.UNICODE).strip()
     s = re.sub(r"[\s_]+", " ", s)
-    return s or "Untitled"
+    s = s.strip()
+    
+    if not s:
+        s = fallback_gid if fallback_gid else "Untitled"
+        
+    encoded = s.encode("utf-8")
+    if len(encoded) > 200:
+        s = encoded[:200].decode("utf-8", errors="ignore").strip()
+        
+    return s
 
 
 def display_title(name):
@@ -626,7 +635,7 @@ def plan_sync(token, vault, workspace_gid=None, project_limit=None):
     for p in projects:
         gid = p["gid"]
         tasks = fetch_project_tasks(token, gid)
-        note_name = slugify(p.get("name"))
+        note_name = slugify(p.get("name"), fallback_gid=gid)
         ws_name = ws.get("name")
 
         cur = existing.get(gid)
@@ -746,7 +755,8 @@ def apply_plan(vault, plan, meta):
         if os.path.exists(path):
             # name collision with a different gid -- disambiguate, never clobber
             base = item["filename"][:-3]
-            path = os.path.join(folder, "%s (%s).md" % (base, item["fm"]["asana_gid"][-6:]))
+            item["filename"] = "%s (%s).md" % (base, item["fm"]["asana_gid"][-6:])
+            path = os.path.join(folder, item["filename"])
         block = render_hermes_block(item["project"], item["tasks"],
                                     meta["synced_at"], item["fm"]["_title"])
         atomic_write(path, build_note(item["fm"], block))
@@ -798,10 +808,15 @@ def write_index(vault, plan, meta):
     all_items = plan["create"] + plan["update"] + plan["skip"]
     if all_items:
         for it in all_items:
-            fm = it["fm"]
-            title = fm["_title"]
+            if "existing" in it:
+                filename = os.path.basename(it["existing"]["path"])
+            else:
+                filename = it.get("filename", "")
+            if filename.endswith(".md"):
+                filename = filename[:-3]
+
             lines.append("- [[%s]] — `%s` — vence %s"
-                         % (slugify(title), fm["asana_gid"],
+                         % (filename, fm["asana_gid"],
                             fm.get("due_date") or "sin fecha"))
     else:
         lines.append("Sin proyectos detectados.")
@@ -822,8 +837,15 @@ def write_index(vault, plan, meta):
         od = [t for t in tasks
               if not task_is_done(t) and t.get("due_on") and t["due_on"] < today]
         if od:
+            if "existing" in it:
+                filename = os.path.basename(it["existing"]["path"])
+            else:
+                filename = it.get("filename", "")
+            if filename.endswith(".md"):
+                filename = filename[:-3]
+
             risk_lines.append("- [[%s]] — %d tarea(s) vencida(s)"
-                              % (slugify(p.get("name")), len(od)))
+                              % (filename, len(od)))
     lines.append(md_list(risk_lines, "Sin riesgos abiertos detectados."))
     lines += [
         "",
@@ -932,8 +954,8 @@ def write_snapshot(vault, plan, meta):
     lines = [
         f"# Snapshot: {today}",
         "",
-        "| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker |",
-        "|---|---|---|---|---|---|---|---|---|---|---|"
+        "| asana_gid | Proyecto | Status | Total | Done | Blocked | Due Date | % | Replans | Slip Days | Blocker | Filename |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|"
     ]
     
     all_items = plan["create"] + plan["update"] + plan["skip"]
@@ -952,12 +974,16 @@ def write_snapshot(vault, plan, meta):
         if total > 0:
             pct = round((done / total) * 100)
             
-        replan = fm.get("replan_count") or 0
+        replans = fm.get("replan_count") or 0
         slip = fm.get("slip_days") or 0
-        blocker = fm.get("critical_blocker") or ""
-        blocker = str(blocker).replace("|", "\\|")
+        blocker = str(fm.get("critical_blocker") or "").replace("|", "\\|")
+        
+        if "existing" in it:
+            filename = os.path.basename(it["existing"]["path"])
+        else:
+            filename = it.get("filename", "")
             
-        lines.append(f"| {gid} | {name} | {status} | {total} | {done} | {blocked} | {due} | {pct} | {replan} | {slip} | {blocker} |")
+        lines.append(f"| {gid} | {name} | {status} | {total} | {done} | {blocked} | {due} | {pct} | {replans} | {slip} | {blocker} | {filename} |")
         
     atomic_write(path, "\n".join(lines) + "\n")
     return path

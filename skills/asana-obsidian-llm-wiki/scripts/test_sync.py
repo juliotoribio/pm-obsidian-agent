@@ -200,8 +200,6 @@ Esto es un comentario humano.
             snap2_path = os.path.join(tmp, "03 Log", "2026-09-18.md")
             self.assertTrue(os.path.exists(snap2_path))
 
-if __name__ == '__main__':
-    unittest.main()
 
     @patch("asana_obsidian_sync.datetime")
     @patch("asana_obsidian_sync.fetch_workspaces")
@@ -211,6 +209,11 @@ if __name__ == '__main__':
     @patch("asana_obsidian_sync.fetch_me")
     @patch("asana_obsidian_sync.fetch_portfolios")
     def test_edge_cases_and_slug_collisions(self, mock_portfolios, mock_me, mock_tasks, mock_projects, mock_teams, mock_workspaces, mock_datetime):
+        from datetime import datetime, timezone
+        dt = datetime(2026, 9, 17, 10, 0, tzinfo=timezone.utc)
+        mock_datetime.now.return_value = dt
+        mock_datetime.strptime = datetime.strptime # pass through strptime
+        
         mock_workspaces.return_value = [{"gid": "ws1", "name": "Workspace 1"}]
         mock_teams.return_value = [{"gid": "t1", "name": "Team 1"}]
         mock_me.return_value = {"gid": "me1", "name": "User 1"}
@@ -225,16 +228,20 @@ if __name__ == '__main__':
         mock_tasks.side_effect = mock_fetch_tasks
 
         long_name = "A" * 250
+        long_name_2 = "A" * 250 + "B" # Deberían truncarse igual y colisionar
         
         mock_projects.return_value = [
             {"gid": "p_weird", "name": "Project / with | and : and 🚀", "due_on": "2026-09-20"},
             {"gid": "p_long", "name": long_name, "due_on": "2026-09-20"},
+            {"gid": "p_long_2", "name": long_name_2, "due_on": "2026-09-20"},
             {"gid": "p_no_due", "name": "No Due Date"},
             {"gid": "p_no_tasks", "name": "No Tasks", "due_on": "2026-09-20"},
             {"gid": "p_all_completed", "name": "All Completed", "due_on": "2026-09-20"},
             # Colisión de nombres
             {"gid": "p_col1", "name": "Mi Proyecto", "due_on": "2026-09-20"},
-            {"gid": "p_col2", "name": "Mi/Proyecto", "due_on": "2026-09-20"},
+            {"gid": "p_col2", "name": "Mi_Proyecto", "due_on": "2026-09-20"},
+            # Slug vacío
+            {"gid": "p_empty", "name": "🚀///🚀", "due_on": "2026-09-20"},
         ]
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -244,12 +251,12 @@ if __name__ == '__main__':
             plan1, meta1 = plan_sync("fake_token", tmp)
             import asana_obsidian_sync
             asana_obsidian_sync.apply_plan(tmp, plan1, meta1)
+            asana_obsidian_sync.write_snapshot(tmp, plan1, meta1)
             
             # Verificar existencia de archivos en el disco y evitar sobreescritura
             files = set(os.listdir(os.path.join(tmp, "02 Projects")))
-            
-            # Deberíamos tener 7 archivos distintos
-            self.assertEqual(len(files), 7)
+            # Deberíamos tener 9 archivos distintos
+            self.assertEqual(len(files), 9)
             
             # Verificar nombres de archivo (slugify & colisiones)
             self.assertIn("Project with and and.md", files) # Caracteres raros limpiados
@@ -258,18 +265,26 @@ if __name__ == '__main__':
             self.assertIn("All Completed.md", files)
             self.assertIn("Mi Proyecto.md", files)
             self.assertIn("Mi Proyecto (p_col2).md", files) # Desempate aplicado
+            self.assertIn("p_empty.md", files) # Slug vacío usa gid
             
-            # Verificar longitud máxima (Mac permite 255 bytes)
-            self.assertIn(long_name + ".md", files)
+            # Verificar longitud máxima y colisión
+            self.assertIn(long_name[:200] + ".md", files)
+            self.assertIn(long_name[:200] + " (long_2).md", files)
             
+            # Verificar snapshot columns
+            snap_path = os.path.join(tmp, "03 Log", "2026-09-17.md")
+            self.assertTrue(os.path.exists(snap_path))
+            with open(snap_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                self.assertIn("| Filename |", content)
+                self.assertIn("| p_empty.md |", content)
+                self.assertIn("| Mi Proyecto (p_col2).md |", content)
+                
             # SIMULAR SEGUNDO SYNC (Incremental)
-            # ¿Se detecta como update o se duplica?
             plan2, meta2 = plan_sync("fake_token", tmp)
             
-            # En un comportamiento ideal, p_col2 debería mapearse a la nota existente "Mi Proyecto (p_col2).md".
-            # Verifiquemos si plan_sync se da cuenta.
-            # plan_sync usa scan_existing_notes que usa asana_gid.
-            # Así que SÍ se da cuenta de que existe, porque la nota tiene el asana_gid correcto.
-            
             self.assertEqual(len(plan2["create"]), 0)
-            self.assertEqual(len(plan2["update"]), 7)
+            self.assertEqual(len(plan2["skip"]), 9)
+
+if __name__ == '__main__':
+    unittest.main()
