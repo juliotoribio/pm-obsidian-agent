@@ -3,7 +3,7 @@
 Bootstrap Obsidian Vault for Hermes PM Agent.
 
 Creates the foundational folder structure and standard rollup notes (00 Portafolio.base,
-09 Vistas/Bloqueados.base).
+01 Programas/Programa General.base, 09 Vistas/Bloqueados.base).
 
 Usage:
   python bootstrap_vault.py <VAULT_PATH> [--apply]
@@ -41,6 +41,39 @@ properties:
   formula.dias_para_due:
     displayName: "Días a vencer"
   status:
+    displayName: Estado
+
+views:
+  - type: table
+    name: "Portafolio por programa"
+    groupBy:
+      property: programa
+      direction: ASC
+    order:
+      - formula.salud
+      - file.name
+      - status
+      - formula.pct
+      - tasks_blocked
+      - due_date
+      - formula.dias_para_due
+      - owner
+    summaries:
+      formula.pct: Average
+      tasks_blocked: Sum
+
+  - type: table
+    name: "En riesgo"
+    filters:
+      or:
+        - 'tasks_blocked > 0'
+        - 'formula.vencida == true'
+    order:
+      - file.name
+      - programa
+      - status
+      - formula.pct
+      - due_date
 """
 
 BLOQUEADOS_BASE = """filters:
@@ -57,6 +90,38 @@ views:
       - critical_blocker
       - due_date
       - owner
+"""
+
+PROGRAMA_BASE = """filters:
+  and:
+    - 'type == "proyecto"'
+    - 'programa == this.file.asLink()'
+
+formulas:
+  pct: 'if(tasks_total, (tasks_done / tasks_total * 100).round(0), 0)'
+
+views:
+  - type: table
+    name: "Proyectos del programa"
+    order:
+      - file.name
+      - status
+      - formula.pct
+      - tasks_blocked
+      - due_date
+      - owner
+    summaries:
+      formula.pct: Average
+"""
+
+PROGRAMA_MD = """---
+type: index
+---
+# Programa General
+
+Agrupador genérico para proyectos sin portafolio.
+
+![[Programa General.base]]
 """
 
 def main():
@@ -95,6 +160,11 @@ def main():
     if args.apply:
         os.makedirs(os.path.join(vault, "09 Vistas"), exist_ok=True)
     write_file("09 Vistas/Bloqueados.base", BLOQUEADOS_BASE)
+
+    if args.apply:
+        os.makedirs(os.path.join(vault, "01 Programas"), exist_ok=True)
+    write_file("01 Programas/Programa General.base", PROGRAMA_BASE)
+    write_file("01 Programas/Programa General.md", PROGRAMA_MD)
 
     if not args.apply:
         print("\n[DRY-RUN] No se escribió nada. Usa --apply para ejecutar.")
