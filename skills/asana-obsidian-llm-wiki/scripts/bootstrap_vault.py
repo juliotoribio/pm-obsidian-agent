@@ -167,7 +167,8 @@ views:
 PROGRAMA_BASE = """filters:
   and:
     - 'type == "proyecto"'
-    - 'programa == this.file.asLink()'
+    - 'workspace == "Workspace General"'
+    - 'programa == "[[Programa General]]"'
 
 formulas:
   ws_programa: 'if(workspace, workspace + " / " + programa, programa)'
