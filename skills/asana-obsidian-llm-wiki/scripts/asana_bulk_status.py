@@ -57,10 +57,8 @@ def load_env(path=None):
 
 
 def get_token(env):
-    # The key is ASANA_ACCESS_TOKEN. Do not guess ASANA_PAT.
-    for key in ("ASANA_ACCESS_TOKEN", "ASANA_TOKEN", "ASANA_API_KEY"):
-        if env.get(key):
-            return env[key]
+    if env.get("ASANA_ACCESS_TOKEN"):
+        return env["ASANA_ACCESS_TOKEN"]
     sys.exit(
         "FATAL: no Asana token in .env. Keys seen: "
         + ", ".join(k for k in env if "ASANA" in k.upper())

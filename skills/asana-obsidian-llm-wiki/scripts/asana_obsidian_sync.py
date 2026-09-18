@@ -37,6 +37,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+import time
 from datetime import datetime, timezone
 
 ASANA_API = "https://app.asana.com/api/1.0"
@@ -108,7 +109,6 @@ def asana_get(token, path, params=None):
             "Accept": "application/json",
         },
     )
-    import time
     while True:
         try:
             with urllib.request.urlopen(req, timeout=45) as resp:
@@ -140,7 +140,7 @@ def fetch_teams(token, workspace_gid):
         return []
 
 
-def fetch_projects(token, workspace_gid, limit=5):
+def fetch_projects(token, workspace_gid, limit=None):
     out = []
     params = {
         "opt_fields": "name,notes,color,archived,due_on,start_on,"
@@ -356,27 +356,28 @@ def parse_frontmatter(text):
     fm = {}
     lines = raw.splitlines()
     current_key = None
-    current_val = []
     
-    def save_current():
-        if current_key:
-            val = "\n".join(current_val).strip()
-            if val.startswith('"') and val.endswith('"'): val = val[1:-1]
-            elif val.startswith("'") and val.endswith("'"): val = val[1:-1]
-            fm[current_key] = val
-
     for line in lines:
-        if not line.strip() or line.lstrip().startswith("#"):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
             continue
         if not line.startswith(" ") and not line.startswith("- ") and ":" in line:
-            save_current()
             k, sep, v = line.partition(":")
             current_key = k.strip()
-            current_val = [v.strip()] if v.strip() else []
-        else:
-            if current_key:
-                current_val.append(line)
-    save_current()
+            v = v.strip()
+            if v:
+                if v.startswith("[") and v.endswith("]"):
+                    # Parse inline list like ["A", "B"]
+                    inner = v[1:-1]
+                    fm[current_key] = [x.strip().strip('"').strip("'") for x in inner.split(",") if x.strip()]
+                else:
+                    fm[current_key] = v.strip('"').strip("'")
+            else:
+                fm[current_key] = []
+        elif line.lstrip().startswith("- "):
+            if current_key and isinstance(fm[current_key], list):
+                val = line.lstrip()[2:].strip().strip('"').strip("'")
+                fm[current_key].append(val)
     return fm, body
 
 
@@ -398,12 +399,21 @@ def render_frontmatter(fm):
         "critical_blocker", "last_synced_at", "source_hash",
     ]
     lines = ["---"]
+    
+    def add_field(k, v):
+        if isinstance(v, list):
+            lines.append(f"{k}:")
+            for item in v:
+                lines.append(f"  - {yaml_escape(item)}")
+        else:
+            lines.append(f"{k}: {yaml_escape(v)}")
+
     for k in order:
         if k in fm:
-            lines.append("%s: %s" % (k, yaml_escape(fm[k])))
+            add_field(k, fm[k])
     for k, v in fm.items():
         if k not in order and not k.startswith("_"):
-            lines.append("%s: %s" % (k, yaml_escape(v)))
+            add_field(k, v)
     lines.append("---")
     return "\n".join(lines)
 
@@ -600,7 +610,7 @@ def atomic_write(path, text):
 
 # ── main sync ────────────────────────────────────────────────────────────
 
-def plan_sync(token, vault, workspace_gid=None, project_limit=5):
+def plan_sync(token, vault, workspace_gid=None, project_limit=None):
     """Compute the full plan. Returns (plan, meta). Writes nothing."""
     now = datetime.now().astimezone().replace(microsecond=0)
     synced_at = now.isoformat()
@@ -880,7 +890,7 @@ def main():
     ap.add_argument("--apply", action="store_true", help="perform writes")
     ap.add_argument("--query", metavar="GID", help="inspect one project by gid")
     ap.add_argument("--workspace", metavar="GID", help="force a workspace gid")
-    ap.add_argument("--limit", type=int, default=5, help="max projects (default 5)")
+    ap.add_argument("--limit", type=int, default=None, help="max projects (default None/all)")
     ap.add_argument("--record-deletion", metavar="PROJECT_GID",
                     help="record a deleted task in a project note")
     ap.add_argument("--task-name", metavar="NAME",

@@ -18,7 +18,11 @@ El script `asana_obsidian_sync.py` es el núcleo de este skill.
 Lee desde la API de Asana y escribe/actualiza notas `.md` en la bóveda, inyectando propiedades de frontmatter y contenido estructurado.
 
 ```bash
-# Reporte de cambios (Dry Run por defecto)
+- **Inicialización de la bóveda (Bootstrap):**
+  `python3 scripts/bootstrap_vault.py <VAULT_PATH> --apply`
+  Genera la estructura fundacional de carpetas y las vistas transversales `.base` requeridas por Hermes.
+
+- **Reporte de cambios (Dry Run por defecto):**
 python3 scripts/asana_obsidian_sync.py --dry-run
 
 # Aplicar escritura

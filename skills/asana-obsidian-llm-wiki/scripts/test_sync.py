@@ -4,7 +4,7 @@ import unittest
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
-from asana_obsidian_sync import parse_frontmatter, build_note, reconcile_tasks, source_hash
+from asana_obsidian_sync import parse_frontmatter, build_note, reconcile_tasks, source_hash, render_frontmatter
 
 class TestSync(unittest.TestCase):
     def test_parse_frontmatter(self):
@@ -23,7 +23,22 @@ Hello world!"""
         self.assertEqual(fm.get("status"), "active")
         self.assertIn("aliases", fm)
         self.assertIn("tags", fm)
+        self.assertEqual(fm["tags"], ["tag1", "tag2"])
+        self.assertEqual(fm["aliases"], ["P1", "P2"])
         self.assertIn("Hello world!", body)
+
+    def test_roundtrip_frontmatter(self):
+        fm = {
+            "type": "proyecto",
+            "tags": ["estrategico", "capex"],
+            "aliases": ["P1"],
+            "status": "active"
+        }
+        rendered = render_frontmatter(fm)
+        fm2, _ = parse_frontmatter(rendered + "\nbody")
+        self.assertEqual(fm["tags"], fm2["tags"])
+        self.assertEqual(fm["aliases"], fm2["aliases"])
+        self.assertEqual(fm["status"], fm2["status"])
 
     def test_build_note_preserves_human_notes(self):
         fm = {"type": "proyecto"}

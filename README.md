@@ -55,7 +55,16 @@ OBSIDIAN_VAULT_PATH=<ruta...vault>
 
 > **Nunca** subas este archivo a un repositorio. Contiene secretos.
 
-### 4. Verificar
+### 4. Inicializar la Bóveda (Bootstrap)
+
+Si es la primera vez que sincronizas, debes crear la taxonomía base (carpetas y archivos `.base`) que el agente usa.
+Abre tu terminal y ejecuta el script de inicialización apuntando a tu bóveda:
+
+```bash
+python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/bootstrap_vault.py <ruta...vault> --apply
+```
+
+### 5. Verificar
 
 ```bash
 python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --dry-run
@@ -78,6 +87,14 @@ Consulta un proyecto concreto (lado Asana + lado Obsidian):
 
 ```bash
 python3 asana_obsidian_sync.py --query <PROJECT_GID>
+```
+
+## Pruebas Unitarias
+
+El paquete incluye una suite de pruebas `unittest` que asegura las invariantes (ej. que el frontmatter se lea y escriba sin corromper yaml de listas, y que los hash sean estables):
+
+```bash
+python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/test_sync.py
 ```
 
 ## Cómo funciona

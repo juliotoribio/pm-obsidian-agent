@@ -23,8 +23,7 @@ import urllib.parse
 import urllib.request
 
 API = "https://app.asana.com/api/1.0"
-DEFAULT_ENV = os.path.expanduser(
-    "~/.hermes/profiles/maha_pm_agent/.env")
+DEFAULT_ENV = None
 
 
 def read_env(path):
@@ -59,7 +58,16 @@ def get(token, path, params=None):
 
 
 def main():
-    env_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_ENV
+    if len(sys.argv) > 1:
+        env_path = sys.argv[1]
+    else:
+        if "HERMES_PROFILE_DIR" in os.environ:
+            env_path = os.path.join(os.environ["HERMES_PROFILE_DIR"], ".env")
+        elif "HERMES_PROFILE" in os.environ:
+            env_path = os.path.expanduser(f"~/.hermes/profiles/{os.environ['HERMES_PROFILE']}/.env")
+        else:
+            env_path = os.path.expanduser("~/.hermes/profiles/default/.env")
+
     env = read_env(env_path)
 
     # Key is split so this file does not itself read like a live secret to

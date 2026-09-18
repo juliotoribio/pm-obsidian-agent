@@ -3,7 +3,7 @@
 Bootstrap Obsidian Vault for Hermes PM Agent.
 
 Creates the foundational folder structure and standard rollup notes (00 Portafolio.base,
-01 Programas/X.md, 09 Vistas/Bloqueados.base).
+09 Vistas/Bloqueados.base).
 
 Usage:
   python bootstrap_vault.py <VAULT_PATH> [--apply]
@@ -16,35 +16,47 @@ import sys
 FOLDERS = [
     "01 Programas",
     "02 Projects",
-    "03 People",
-    "04 Log",
+    "04 Decisions",
     "05 Knowledge",
+    "07 Agents",
     "09 Vistas",
+    "99 System"
 ]
 
-PORTFOLIO_BASE = """---
-type: index
----
-# 00 Portafolio
+PORTFOLIO_BASE = """filters:
+  and:
+    - 'type == "proyecto"'
 
-Este es el punto de entrada principal para el portafolio completo.
-Hermes agrupa los proyectos aquí automáticamente.
+formulas:
+  pct: 'if(tasks_total, (tasks_done / tasks_total * 100).round(0), 0)'
+  vencida: 'if(due_date, date(due_date) < today() && !(tasks_total && tasks_done == tasks_total), false)'
+  dias_para_due: 'if(due_date, (date(due_date) - today()).days, "")'
+  salud: 'if(tasks_blocked > 0, "🔴", if(tasks_total && tasks_done == tasks_total, "✅", if(tasks_total && tasks_done / tasks_total >= 0.5, "🟢", "🟡")))'
 
-![[LLM Wiki Index]]
+properties:
+  formula.salud:
+    displayName: ""
+  formula.pct:
+    displayName: "% avance"
+  formula.dias_para_due:
+    displayName: "Días a vencer"
+  status:
 """
 
-BLOQUEADOS_BASE = """---
-type: query
----
-# Proyectos Bloqueados
+BLOQUEADOS_BASE = """filters:
+  and:
+    - 'type == "proyecto"'
+    - 'tasks_blocked > 0'
 
-Listado de proyectos que presentan la palabra "bloqueo" o similar en sus tareas.
-
-```dataview
-TABLE status as Estado, critical_blocker as Bloqueo
-FROM "02 Projects"
-WHERE tasks_blocked > 0
-```
+views:
+  - type: table
+    name: "Bloqueados en todo el portafolio"
+    order:
+      - file.name
+      - programa
+      - critical_blocker
+      - due_date
+      - owner
 """
 
 def main():
@@ -78,12 +90,11 @@ def main():
         else:
             print(f"  = Archivo existente: {rel_path}")
 
-    write_file("00 Portafolio.base.md", PORTFOLIO_BASE)
+    write_file("00 Portafolio.base", PORTFOLIO_BASE)
     
-    # Asegurar que 09 Vistas existe antes de escribir
     if args.apply:
         os.makedirs(os.path.join(vault, "09 Vistas"), exist_ok=True)
-    write_file("09 Vistas/Bloqueados.base.md", BLOQUEADOS_BASE)
+    write_file("09 Vistas/Bloqueados.base", BLOQUEADOS_BASE)
 
     if not args.apply:
         print("\n[DRY-RUN] No se escribió nada. Usa --apply para ejecutar.")
