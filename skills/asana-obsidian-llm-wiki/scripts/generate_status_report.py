@@ -22,7 +22,6 @@ def parse_snapshot(path):
         return None
         
     out = {}
-    valid_data_found = False
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             if line.startswith("|") and not line.startswith("| asana_gid") and not line.startswith("|---"):
@@ -72,24 +71,22 @@ def parse_snapshot(path):
                         "slip": slip,
                         "blocker": blocker
                     }
-                    valid_data_found = True
                     
-    # Si el archivo existía pero estaba vacío o mal formado (no arrojó filas válidas), retornar None
-    if not valid_data_found and os.path.getsize(path) > 0:
-        # Podría ser un archivo vacío válido, pero si tiene contenido y no logramos parsear filas, asumimos corrupto.
-        # En realidad, mejor verificamos si la línea de cabecera estaba.
-        pass # De momento si devuelve {} está bien si era un snapshot vacío (sin proyectos).
-        
     return out
+
+import re
 
 def get_historical_snapshots(log_dir, fecha_hasta):
     """Devuelve un dict fecha -> snapshot parseado, ordenado cronológicamente hasta fecha_hasta."""
     hist = {}
     if not os.path.isdir(log_dir):
         return hist
+    
+    date_pattern = re.compile(r"^(\d{4}-\d{2}-\d{2})\.md$")
     for f in os.listdir(log_dir):
-        if f.endswith(".md") and f != f"Reporte {fecha_hasta}.md" and not f.startswith("Reporte "):
-            fecha_str = f[:-3]
+        match = date_pattern.match(f)
+        if match:
+            fecha_str = match.group(1)
             if fecha_str <= fecha_hasta:
                 snap = parse_snapshot(os.path.join(log_dir, f))
                 if snap is not None and len(snap) > 0:
