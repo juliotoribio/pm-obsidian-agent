@@ -4,7 +4,7 @@ import unittest
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
-from unittest.mock import patch
+from unittest.mock import patch, mock_open
 from asana_obsidian_sync import parse_frontmatter, build_note, reconcile_tasks, source_hash, render_frontmatter, scan_existing_notes, plan_sync, write_index
 
 class TestSync(unittest.TestCase):
@@ -750,6 +750,53 @@ Esto es un comentario humano.
                 fm2, _ = parse_frontmatter(f.read())
                 self.assertEqual(fm2.get("workspace"), "Workspace 2")
 
+    def test_write_index_no_nameerror(self):
+        from asana_obsidian_sync import write_index
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = {
+                "create": [{"fm": {"asana_gid": "gid1", "due_date": "2026-09-19"}, "filename": "P1.md"}],
+                "update": [],
+                "skip": [{"existing": {"path": "P2.md"}, "fm": {"asana_gid": "gid2"}}]
+            }
+            meta = {
+                "synced_at": "2026-09-19T10:00:00Z",
+                "workspaces": [{"name": "WS1"}]
+            }
+            # Should not raise NameError
+            write_index(tmp, plan, meta)
+            
+            index_path = os.path.join(tmp, "LLM Wiki Index.md")
+            self.assertTrue(os.path.exists(index_path))
+            with open(index_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                self.assertIn("- [[P1]] — `gid1` — vence 2026-09-19", content)
+                self.assertIn("- [[P2]] — `gid2` — vence sin fecha", content)
+
+    @patch("asana_obsidian_sync.os.path.exists")
+    @patch("builtins.open", new_callable=mock_open, read_data="ASANA_ACCESS_TOKEN=from_env_file\nOBSIDIAN_VAULT_PATH=from_env_file")
+    def test_load_env_priorities(self, mock_file, mock_exists):
+        from asana_obsidian_sync import load_env
+        import os
+        mock_exists.return_value = True
+        
+        # Scenario 1: Both in os.environ, os.environ has truncated token
+        with patch.dict(os.environ, {"ASANA_ACCESS_TOKEN": "truncated", "OBSIDIAN_VAULT_PATH": "from_environ"}):
+            token, vault = load_env()
+            self.assertEqual(token, "from_env_file")
+            self.assertEqual(vault, "from_environ")
+            
+        # Scenario 2: Token not in os.environ, Vault not in os.environ
+        with patch.dict(os.environ, {}, clear=True):
+            token, vault = load_env()
+            self.assertEqual(token, "from_env_file")
+            self.assertEqual(vault, "from_env_file")
+            
+        # Scenario 3: Token in os.environ but NOT in env file (simulate missing in .env)
+        mock_file.side_effect = [mock_open(read_data="OBSIDIAN_VAULT_PATH=from_env_file").return_value] * 10
+        with patch.dict(os.environ, {"ASANA_ACCESS_TOKEN": "fallback_environ", "OBSIDIAN_VAULT_PATH": "from_environ"}):
+            token, vault = load_env()
+            self.assertEqual(token, "fallback_environ")
+            self.assertEqual(vault, "from_environ")
 
 if __name__ == '__main__':
     unittest.main()

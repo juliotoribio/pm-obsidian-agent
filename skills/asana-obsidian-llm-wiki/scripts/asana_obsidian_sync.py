@@ -88,7 +88,7 @@ def load_env():
                 if k and k not in found:
                     found[k] = v
 
-    token = os.environ.get("ASANA_ACCESS_TOKEN", found.get("ASANA_ACCESS_TOKEN", "")).strip()
+    token = found.get("ASANA_ACCESS_TOKEN", os.environ.get("ASANA_ACCESS_TOKEN", "")).strip()
     vault = os.environ.get("OBSIDIAN_VAULT_PATH", found.get("OBSIDIAN_VAULT_PATH", "")).strip()
     return token, vault
 
@@ -1057,8 +1057,8 @@ def write_index(vault, plan, meta):
                 filename = filename[:-3]
 
             lines.append("- [[%s]] — `%s` — vence %s"
-                         % (filename, fm["asana_gid"],
-                            fm.get("due_date") or "sin fecha"))
+                         % (filename, it["fm"]["asana_gid"],
+                            it["fm"].get("due_date") or "sin fecha"))
     else:
         lines.append("Sin proyectos detectados.")
     lines += [
