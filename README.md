@@ -1,195 +1,101 @@
 # PM Obsidian Agent
 
-Colección de **Agent Skills** para operar un portafolio de gestión de proyectos (PM) conectando **Asana** con **Obsidian**.
+PM Obsidian Agent es una colección de herramientas para operar un portafolio de proyectos conectando Asana con Obsidian de forma unidireccional. Está diseñado para Project Managers y líderes de portafolio que necesitan gobernar múltiples proyectos a la vez, manteniendo la ejecución dura en Asana y el contexto, riesgos y decisiones a largo plazo en Obsidian. El sistema no solo refleja el estado, sino que automatiza la detección de discrepancias, bloqueos y alertas de salud para forzar decisiones a nivel gerencial.
 
-Asana es la fuente de verdad operativa (tareas, fechas, estados, responsables).
-Obsidian es la base de conocimiento duradero (contexto, decisiones, riesgos, aprendizajes).
-Los skills hacen que un agente sincronice una hacia la otra — **en una sola dirección**.
+## Qué produce
 
-## Los tres skills
+El agente materializa la estructura en Obsidian y genera de forma automática:
 
-| Skill | Rol |
-|---|---|
-| **`obsidian`** | Capa base. Sintaxis correcta de Obsidian: Markdown con WikiLinks, archivos `.base` (vistas tipo base de datos) y `.canvas` (mapas visuales). |
-| **`obsidian-pm-context`** | Capa estructural. El modelo de PM (Programa → Proyecto → Tarea) y las propiedades de *frontmatter* que permiten a Obsidian generar tableros automáticos con Bases. **Requiere `obsidian`.** |
-| **`asana-obsidian-llm-wiki`** | Capa de sincronización. Conecta la API de Asana con el vault de Obsidian: materializa proyectos, reconcilia estados y mantiene los reportes al día. |
+- **Dashboard de Portafolio**: Vista raíz que consolida todos los proyectos agrupados por programa, con métricas de avance y finanzas.
+- **Detección de Watermelons (Discrepancia RAG)**: Cruza el estado declarado por el PM frente a la realidad de avance, identificando proyectos que dicen estar en verde pero matemáticamente están en rojo.
+- **Mapas de Carga y Riesgos (Personas)**: Crea perfiles automáticos por integrante mostrando su volumen de tareas bloqueadas y alertas críticas de *bus factor*.
+- **Alertas Financieras**: Cruza el consumo de presupuesto contra el avance real para detectar desviaciones tempranas, y audita proyectos que omitieron clasificación de CAPEX/OPEX.
+- **Registro de Riesgos Abiertos**: Centraliza los riesgos de todos los proyectos (redactados por humanos) ordenados matemáticamente por su nivel de exposición (probabilidad × impacto).
+- **Reportes de Estatus por Corte**: Guarda un snapshot temporal diario del portafolio, permitiendo generar reportes que comparan dos fechas para exponer con precisión matemática qué cambió, qué empeoró y qué se resolvió.
+- **Digest Proactivo**: Emite un resumen inteligente y asíncrono con alertas nuevas (deltas) listo para integrarse y enviarse por Slack, Teams o Telegram.
 
 ## Requisitos
 
-- **Obsidian** instalado, con un vault existente.
-- **Asana** con un Personal Access Token ([cómo generarlo](https://developers.asana.com/docs/personal-access-token)).
-- **Hermes Agent** instalado y funcionando.
+- **Obsidian** instalado, con un vault local (y el plugin *Bases* para renderizar las vistas `.base`).
+- **Asana** con un Personal Access Token.
+- **Python 3.10** o superior.
 
 ## Instalación
 
-### 1. Clonar
+### 1. Clonar el repositorio
 
 ```bash
 git clone https://github.com/juliotoribio/pm-obsidian-agent.git
+cd pm-obsidian-agent
 ```
 
-### 2. Copiar los skills a tu perfil de Hermes
+### 2. Configurar credenciales
 
-Los skills van al directorio `skills/` de tu perfil. Sustituye `<PERFIL>` por el nombre de tu perfil:
+El script lee las siguientes variables de entorno. Puedes exportarlas en tu terminal o configurarlas en el archivo `.env` de tu perfil de agente:
 
 ```bash
-cp -R pm-obsidian-agent/skills/* ~/.hermes/profiles/<PERFIL>/skills/
+export ASANA_ACCESS_TOKEN=<tu_personal_access_token>
+export OBSIDIAN_VAULT_PATH=<ruta_absoluta_a_tu_vault_de_obsidian>
 ```
+> **Seguridad**: Nunca subas el token a un repositorio.
 
-Verifica que se detectaron:
+### 3. Instalar dependencias
+
+El motor de sincronización depende de utilidades para leer y escribir el frontmatter YAML sin corromper la estructura de los archivos.
 
 ```bash
-hermes skills list | grep -E "obsidian|asana"
+pip install -r skills/asana-obsidian-llm-wiki/requirements.txt
 ```
 
-Deberías ver los tres skills en estado `enabled`.
+### 4. Inicializar la Bóveda (Bootstrap)
 
-### 3. Configurar credenciales
-
-En el archivo `.env` de tu perfil (`~/.hermes/profiles/<PERFIL>/.env`):
-
-```
-ASANA_ACCESS_TOKEN=<tu...PAT>
-OBSIDIAN_VAULT_PATH=<ruta...vault>
-```
-
-> **Nunca** subas este archivo a un repositorio. Contiene secretos.
-
-### 4. Instalar dependencias de Python
-
-El motor de sincronización depende de PyYAML para leer y escribir el frontmatter de Obsidian sin corromperlo.
-Dentro de la carpeta del skill, instala las dependencias:
+Si es la primera vez que sincronizas, debes crear la taxonomía base (carpetas y archivos `.base`) que el agente necesita. Ejecuta el script de inicialización apuntando a tu bóveda:
 
 ```bash
-pip3 install -r ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/requirements.txt
+python3 skills/asana-obsidian-llm-wiki/scripts/bootstrap_vault.py <ruta_del_vault> --apply
 ```
 
-### 5. Inicializar la Bóveda (Bootstrap)
+### 5. Primera Ejecución y Validación (Dry-Run)
 
-Si es la primera vez que sincronizas, debes crear la taxonomía base (carpetas y archivos `.base`) que el agente usa.
-Abre tu terminal y ejecuta el script de inicialización apuntando a tu bóveda:
+Antes de conectar el agente a tu entorno real, realiza un **Dry-Run** para validar que el alcance, los filtros de Asana y la resolución de nombres sean correctos sin riesgo de corromper datos.
 
 ```bash
-python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/bootstrap_vault.py <ruta...vault> --apply
+python3 skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --dry-run
 ```
+Al correrlo, revisa que los proyectos coincidan con tu expectativa y que no haya colisiones de nombres o errores reportados por falta de permisos.
 
-### 6. Verificar
+## Uso de los Scripts
 
-```bash
-python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --dry-run
-```
+- **`asana_obsidian_sync.py`**: El motor principal. Lee Asana y escribe/actualiza el vault de Obsidian. Por defecto corre en modo dry-run. Para aplicar los cambios reales, debes pasarle el flag `--apply`. Además, en cada escritura, guarda un snapshot diario en `03 Log/`. Soporta proyectos en múltiples workspaces.
+- **`bootstrap_vault.py`**: Crea o repara la estructura de carpetas, plantillas y vistas `.base` (dashboard, discrepancias, bloqueados, finanzas) en el vault de Obsidian. 
+- **`generate_status_report.py`**: Compara dos snapshots históricos de `03 Log/` (ej. `generate_status_report.py 2026-09-01 2026-09-15`) y produce un reporte Markdown humano explicando las variaciones del portafolio en esa quincena.
+- **`generate_proactive_digest.py`**: Analiza el portafolio en tiempo real frente al último envío reportado y devuelve un string Markdown con alertas accionables (cambios de RAG, nuevas fechas vencidas) suprimiendo el ruido repetitivo.
 
-Debe listar el workspace detectado y los proyectos que se sincronizarían. Con `--dry-run` no escribe nada en el vault.
+## Estructura del Vault
 
-### 6. Ejecución del Agente
-```bash
-python3 skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --apply
-```
+El sistema asume (y el `bootstrap_vault.py` crea) la siguiente topología de conocimiento:
 
-### 7. Primera Ejecución y Validación (Dry-Run)
-
-Antes de conectar el agente a tu entorno real, sigue esta secuencia de "primer contacto" para validar que el comportamiento es el esperado sin riesgo de corromper datos:
-
-1. **Dry-Run del Sync**:
-   Al omitir la variable `OBSIDIAN_VAULT_PATH`, el script tomará tu bóveda real configurada en `.env`. Esto es intencional: al ser `--dry-run` no se escribirá nada, pero el plan que verás en consola te mostrará el impacto exacto que tendría sobre tu entorno real.
-   ```bash
-   python3 skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --dry-run
-   ```
-   **🚨 Qué revisar antes de autorizar el `--apply`:**
-   - **Resolución de programas homónimos**: Revisa que los programas con igual nombre en distintos workspaces (ej. "Transformación Digital") se prefijen correctamente con el nombre del Workspace.
-   - **Colisiones de nombres (Slugs)**: La función `slugify` limpia caracteres especiales (como emojis o corchetes). Presta atención a proyectos cuyos nombres en Asana sean casi idénticos y solo se diferencien por símbolos; al limpiarse, podrían colapsar en el mismo slug y sobrescribir la misma nota.
-   - **Alcance correcto (Scope)**: Verifica que la cantidad de proyectos detectados coincida con tu expectativa. Si procesa muchos más de los esperados, podría estar incluyendo proyectos archivados o workspaces no deseados.
-   - **Campos faltantes**: Observa si hay advertencias repetitivas sobre campos personalizados faltantes (ej. RAG, Blockers). Si ocurre masivamente, Asana podría haber cambiado los GIDs internos de esos campos.
-
-2. **Aplicar en Vault de Prueba**:
-   Si el plan del paso 1 es correcto, aplícalo contra un vault de prueba, no el real. Esto generará la estructura y el primer snapshot en `03 Log/`.
-   ```bash
-   mkdir -p /tmp/obsidian-test-vault
-   python3 skills/asana-obsidian-llm-wiki/scripts/bootstrap_vault.py /tmp/obsidian-test-vault --apply
-   OBSIDIAN_VAULT_PATH=/tmp/obsidian-test-vault python3 skills/asana-obsidian-llm-wiki/scripts/asana_obsidian_sync.py --apply
-   ```
-
-3. **Prueba del Digest (Dry-Run)**:
-   Apunta el digest al vault de prueba.
-   ```bash
-   python3 skills/asana-obsidian-llm-wiki/scripts/generate_proactive_digest.py /tmp/obsidian-test-vault --dry-run
-   ```
-   **🔍 Qué esperar ver (con un solo snapshot):**
-   - Como es la primera vez que corre, no existe historial previo (`digest-state.json` está vacío), por lo que los deltas necesitan al menos dos cortes para reportar empeoramientos o recuperaciones.
-   - El digest evaluará el estado absoluto de crisis actual. Cualquier proyecto vencido (fecha pasada y pct < 100) o con tareas bloqueadas será evaluado como Rojo.
-   - Al no tener registro anterior, TODAS estas alertas saldrán catalogadas exclusivamente como `🔴 NUEVO`.
-   - Los proyectos sanos pasarán a verde silenciosamente.
-   - No verás alertas de `EMPEORÓ`, `RECUPERADO` ni `RECORDATORIO`.
-
-## Snapshot y Baseline
-En cada ejecución con `--apply`, se genera un snapshot del estado en `03 Log/YYYY-MM-DD.md`. Además, la nota de cada proyecto recibe tres métricas inmutables/históricas en su frontmatter (`baseline_due_date`, `replan_count`, `slip_days`). Todo esto sienta las bases de un historial de PMO (Ver `ROADMAP.md`).
-
-## Uso
-
-El script principal sincroniza Asana → Obsidian:
-
-```bash
-python3 asana_obsidian_sync.py --dry-run    # reporte previo, no escribe nada
-python3 asana_obsidian_sync.py --apply      # ejecuta
-```
-
-`--dry-run` es el modo por defecto. Ninguna escritura ocurre sin `--apply`.
-
-Consulta un proyecto concreto (lado Asana + lado Obsidian):
-
-```bash
-python3 asana_obsidian_sync.py --query <PROJECT_GID>
-```
-
-## Pruebas Unitarias
-
-El paquete incluye una suite de pruebas `unittest` que asegura las invariantes (ej. que el frontmatter se lea y escriba sin corromper yaml de listas, y que los hash sean estables):
-
-```bash
-python3 ~/.hermes/profiles/<PERFIL>/skills/asana-obsidian-llm-wiki/scripts/test_sync.py
-```
-
-## Cómo funciona
-
-- **Identidad por ID.** Cada nota se identifica por su `asana_gid`, no por su nombre. Un proyecto renombrado en Asana no crea una nota duplicada.
-- **Zonas separadas.** El agente escribe únicamente entre `<!-- HERMES:START -->` y `<!-- HERMES:END -->`. Todo lo demás — incluida la sección `## Notas humanas` — es intocable.
-- **Sin embeddings.** Markdown, frontmatter, WikiLinks y búsqueda full-text. Sin base vectorial, sin graph database.
-- **Falla en cerrado.** Si Asana no responde, el script aborta sin escribir nada en el vault.
-- **Solo lectura por defecto.** La sincronización únicamente emite `GET`. Las escrituras hacia Asana se hacen mediante los scripts REST atómicos incluidos, nunca durante un sync.
-
-## Agrupación en Programas
-
-Los proyectos se agrupan por **Portfolio de Asana** cuando existe. Si tu plan de Asana no incluye Portfolios, todos los proyectos caen bajo el nombre del **Workspace** para que no queden huérfanos en el portafolio.
-
-Para forzar una agrupación distinta, agrega `programa_manual` al frontmatter de la nota:
-
-```yaml
-programa_manual: "[[Infraestructura]]"
-```
-
-Asana manda: si existe un Portfolio, se usa ese, y `programa_manual` se ignora.
-
-## Estructura del vault
-
-```
+```text
 00 Portafolio.base          # dashboard raíz — todos los proyectos
-01 Programas/               # una nota por programa (+ su .base)
-02 Projects/                # una nota por proyecto de Asana
-03 Log/                   # snapshots diarios e historial temporal
-04 Decisions/               # decisiones documentadas
-05 Knowledge/               # conocimiento reutilizable
-07 Agents/                  # agentes registrados
-09 Vistas/                  # vistas transversales (bloqueados, en riesgo)
-99 System/                  # protocolo y configuración
+01 Programas/               # agrupadores de proyectos y sus vistas
+02 Projects/                # una nota gestionada automáticamente por proyecto de Asana
+03 Log/                     # snapshots diarios, historial temporal y reportes generados
+04 Decisions/               # decisiones documentadas (manual)
+05 Knowledge/               # conocimiento reutilizable (manual)
+06 Risks/                   # registro formal de riesgos (manual, se vincula a proyectos)
+07 Agents/                  # perfiles y prompts de agentes
+08 People/                  # perfiles y carga de trabajo del equipo extraído de Asana
+09 Vistas/                  # vistas transversales (Bloqueados, RAG, Hitos, Finanzas)
+99 System/                  # plantillas de markdown y configuración interna
 ```
 
 ## Seguridad
 
-- Ningún secreto vive en el vault.
-- El agente nunca borra notas del vault.
-- Las escrituras masivas requieren aprobación previa.
-- El borrado en Asana se pide explícitamente, elemento por elemento, nunca en lote.
+- **GET-Only hacia Asana**: Los scripts de sincronización principal y generación de reportes nunca realizan operaciones de escritura, actualización o borrado sobre Asana.
+- **Preservación Humana**: El agente solo reescribe el bloque demarcado por `<!-- HERMES:START -->` y actualiza propiedades específicas del frontmatter. El resto del archivo del proyecto (notas humanas, reflexiones) es intocable y se preserva íntegro.
+- **Sin Secretos Locales**: Ningún token o secreto se inyecta o vive en el vault de Obsidian.
+- **Falla en Cerrado**: Si la red falla o Asana devuelve error, el script aborta inmediatamente sin escribir nada en el vault, protegiendo la integridad de la base de conocimiento local.
 
 ## Licencia
 
-MIT
+Este proyecto está bajo la licencia MIT.
